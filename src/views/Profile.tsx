@@ -105,7 +105,7 @@ export function Profile({ bridge, onNav, onQuit }: { bridge: TuiBridge; onNav: (
     })();
   }
   // Verify a file's Content Credentials (the web /valid view) — same engine verifier the
-  // /valid page + `brand-tool validate` use.
+  // /valid page + `lolly validate` use.
   function doVerify(path: string): void {
     setVerifying(false);
     const p = path.trim(); if (!p) return;

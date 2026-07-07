@@ -671,7 +671,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
       .then(() => setStatus(`✓ Saved project “${nm}”`)).catch(e => setStatus('Save failed: ' + (e as Error).message));
   }
   // Build a lolly.tools share link for the CURRENT state (the hash-share form the web
-  // Share dialog produces — reopens on web, CLI (`brand-tool <url>`), or the TUI's `u`).
+  // Share dialog produces — reopens on web, CLI (`lolly <url>`), or the TUI's `u`).
   // Shown full-width in the Preview panel to select-copy, and saved as a .txt backup.
   function shareTool(): void {
     if (!runtime) return;
