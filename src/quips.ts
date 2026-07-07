@@ -27,11 +27,6 @@ export const QUIPS: readonly string[] = [
   'Almost there — buffing the edges…',
 ];
 
-/** A uniformly-random quip (used at export start). */
-export function randomQuip(): string {
-  return QUIPS[Math.floor(Math.random() * QUIPS.length)]!;
-}
-
 /** Deterministic rotation by tick index — `QUIPS[i % QUIPS.length]`. Progress.tsx bumps
  *  `i` on a timer so the line cycles without re-randomising on every React re-render. */
 export function quipAt(i: number): string {
