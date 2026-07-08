@@ -4,7 +4,7 @@
  * mountTool → createRuntime; renderSvg turns the current state into an SVG string
  * (for the terminal preview); exportToFile writes a real file via the Node bridge.
  */
-import { loadTool, createRuntime, parseUrlState, serializeUrlState, embedC2pa, C2PA_FORMATS, ENGINE_VERSION } from '@lolly/engine';
+import { loadTool, createRuntime, parseUrlState, serializeUrlState, embedC2pa, summarizeInputs, C2PA_FORMATS, ENGINE_VERSION } from '@lolly/engine';
 import { writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -107,11 +107,23 @@ export async function exportToFile(
     let out = bytes;
     if (dims.c2paDays && !transform && C2PA_FORMATS.includes(fmt)) {
       try {
+        // Match the web/CLI tools.lolly.export enrichment: context + date + output
+        // size + the scalar-input digest, so a TUI-made asset inspects as richly.
+        const inputs = summarizeInputs(runtime.getModel());
+        const sizeLine = (typeof dims.width === 'number' && dims.width > 0 && typeof dims.height === 'number' && dims.height > 0)
+          ? (dims.unit && dims.unit !== 'px' ? `${dims.width} × ${dims.height} ${dims.unit} @ ${dims.dpi || 300} DPI` : `${dims.width} × ${dims.height} px`)
+          : undefined;
         out = await embedC2pa(bytes, fmt, {
           title: (manifest as { name?: string }).name ?? (manifest as { id: string }).id,
           claimGenerator: 'Lolly lolly.tools',
           generatorInfo: { name: 'Lolly', version: ENGINE_VERSION },
-          environment: { surface: 'tui', engine: 'node', os: process.platform, format: fmt, tool: (manifest as { id: string }).id },
+          environment: {
+            surface: 'tui', engine: `node ${process.version}`, os: process.platform, format: fmt,
+            tool: (manifest as { name?: string }).name ?? (manifest as { id: string }).id,
+            date: new Date().toISOString(),
+            ...(sizeLine ? { dimensions: sizeLine } : {}),
+            ...(Object.keys(inputs).length ? { inputs } : {}),
+          },
           dates: { notBefore: new Date(Date.now() - 60_000), notAfter: new Date(Date.now() + dims.c2paDays * 86_400_000) },
         });
       } catch { /* non-fatal — write the unstamped bytes */ }
