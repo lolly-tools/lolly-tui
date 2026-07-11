@@ -31,6 +31,7 @@ export interface CaptureParams {
   recolor: string;       // none | invert | grayscale | sepia | hue | tint
   tintColor: string;     // colour for the 'tint' recolor
   hue: number;           // degrees for the 'hue' recolor
+  zoom: number;          // browser zoom level (1 = 100%); magnifies before the shot
 }
 
 export interface CaptureDims { width: number; height: number; dpi: number }
@@ -81,8 +82,14 @@ export async function captureUrl(
       throw new BrowserError(`Couldn't load ${params.url}: ${e.message}`);
     });
 
-    // Recolor + custom CSS, injected before the shot (userstyle-style, additive).
-    const styles = [recolorCss(params), params.css || ''].filter(Boolean).join('\n');
+    // Browser zoom → a `zoom` on <html> (like Ctrl/Cmd +): magnifies the page so
+    // even a bitmap shot is enlarged and crisp, not upscaled. scrollHeight reflows
+    // with it, so the crop/scroll math below stays consistent.
+    const zoom = Number.isFinite(params.zoom) && params.zoom > 0 ? params.zoom : 1;
+    const zoomCss = Math.abs(zoom - 1) > 1e-3 ? `html{zoom:${zoom}!important}` : '';
+
+    // Recolor + zoom + custom CSS, injected before the shot (userstyle-style, additive).
+    const styles = [recolorCss(params), zoomCss, params.css || ''].filter(Boolean).join('\n');
     if (styles) await page.addStyleTag({ content: styles }).catch(() => {});
 
     // A 'tint' recolor lays a multiply overlay of the chosen colour over the page.
@@ -160,5 +167,6 @@ export function captureParamsFrom(model: Array<{ id: string; value: unknown }>):
     recolor: str(v.recolor, 'none'),
     tintColor: str(v.tintColor, '#0c322c'),
     hue: num(v.hue, 0),
+    zoom: num(v.zoom, 1),
   };
 }

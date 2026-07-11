@@ -65,8 +65,11 @@ export async function createTuiBridge(profile: Profile = {}): Promise<TuiBridge>
       const { bytes, mime } = await captureUrl(
         {
           url: spec.url, scrollDepth: spec.scrollDepth ?? 0, waitMs: spec.waitMs ?? 500,
-          css: spec.css ?? '', cropLeft: 0, cropRight: 0, cropTop: 0, cropBottom: 0,
+          css: spec.css ?? '',
+          cropLeft: spec.crop?.left ?? 0, cropRight: spec.crop?.right ?? 0,
+          cropTop: spec.crop?.top ?? 0, cropBottom: spec.crop?.bottom ?? 0,
           recolor: 'none', tintColor: '#0c322c', hue: 0,
+          zoom: 1, // zoom rides in spec.css (html{zoom:…}) — don't double-apply
         },
         'png',
         { width: spec.width, height: spec.height ?? spec.width, dpi: (spec.dpr ?? 1) * 96 },
