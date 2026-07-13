@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 // TUI palette. Ink accepts named colours or hex strings for color/backgroundColor.
 export const theme = {
-  accent: '#30ba78',      // SUSE green
   accentName: 'green',
   fg: 'white',
   dim: 'gray',

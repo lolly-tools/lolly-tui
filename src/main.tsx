@@ -33,7 +33,9 @@ async function main(): Promise<void> {
   restore();
   // Tear down the browser render tier if it was ever launched (lazy singletons —
   // no-ops when the session never rendered a raster/pdf/URL capture).
-  const [{ closeBrowser }, { closeWebShell }] = await Promise.all([import('./browser.ts'), import('./webshell-render.ts')]);
+  const [{ closeBrowser }, { closeWebShell }] = await Promise.all([
+    import('@lolly-tools/node-shell/browsers'), import('@lolly-tools/node-shell/webshell-render'),
+  ]);
   await Promise.all([closeBrowser(), closeWebShell()]);
 }
 

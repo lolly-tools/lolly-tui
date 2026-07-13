@@ -68,7 +68,7 @@ export async function createTuiBridge(profile: Profile = {}): Promise<TuiBridge>
           css: spec.css ?? '',
           cropLeft: spec.crop?.left ?? 0, cropRight: spec.crop?.right ?? 0,
           cropTop: spec.crop?.top ?? 0, cropBottom: spec.crop?.bottom ?? 0,
-          recolor: 'none', tintColor: '#0c322c', hue: 0,
+          recolor: 'none', tintColor: '#111111', hue: 0, // recolor 'none' ⇒ tint unused; neutral placeholder
           zoom: 1, // zoom rides in spec.css (html{zoom:…}) — don't double-apply
         },
         'png',

@@ -165,7 +165,9 @@ export function captureParamsFrom(model: Array<{ id: string; value: unknown }>):
     cropTop: num(v.cropTop, 0),
     cropBottom: num(v.cropBottom, 0),
     recolor: str(v.recolor, 'none'),
-    tintColor: str(v.tintColor, '#0c322c'),
+    // Neutral ink fallback — url-shot's manifest default is {color.semantic.primary},
+    // resolved upstream into the input model; this literal only covers a missing value.
+    tintColor: str(v.tintColor, '#111111'),
     hue: num(v.hue, 0),
     zoom: num(v.zoom, 1),
   };

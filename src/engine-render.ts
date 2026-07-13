@@ -4,17 +4,18 @@
  * mountTool → createRuntime; renderSvg turns the current state into an SVG string
  * (for the terminal preview); exportToFile writes a real file via the Node bridge.
  */
-import { loadTool, createRuntime, parseUrlState, serializeUrlState, embedC2pa, summarizeInputs, C2PA_FORMATS, ENGINE_VERSION } from '@lolly/engine';
+import { loadTool, createRuntime, parseUrlState, serializeUrlState, embedC2pa, C2PA_FORMATS } from '@lolly/engine';
 import { writeFile, mkdir } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
+// The DOM-free/raster format split + the resvg fast path + the export C2PA payload,
+// shared with the CLI (one implementation, no drift).
+import { NODE_FORMATS, pxDims, rasterizeSvgToPng } from '@lolly-tools/node-shell/raster';
+import { buildExportC2paOpts } from '@lolly-tools/node-shell/c2pa-opts';
+import type { RenderDims } from '@lolly-tools/node-shell/webshell-render';
 import { toolFetchFile } from './catalog.ts';
-import type { HostV1 } from '../../../engine/src/bridge/host-v1.ts';
+import { getProfile } from './store.ts';
+import type { HostV1, Profile } from '../../../engine/src/bridge/host-v1.ts';
 import type { JSDOM } from 'jsdom';
-
-// Catalog fonts for the resvg raster fast path (so text-bearing SVG tools rasterise
-// with the brand faces, not whatever the OS has). shells/tui/src → repo root is 3 up.
-const FONTS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'catalog', 'fonts');
 
 export type Runtime = Awaited<ReturnType<typeof createRuntime>>;
 export type Manifest = Awaited<ReturnType<typeof loadTool>>['manifest'];
@@ -33,11 +34,6 @@ export async function mountTool(
 export function currentQuery(runtime: Runtime): string {
   return serializeUrlState(runtime.getModel());
 }
-
-/** Formats the DOM-free engine writes on its own — svg/emf/eps + text/data. Everything
- *  else (raster, pdf, video) is produced by the browser render tier (browser.ts +
- *  webshell-render.ts / url-capture.ts) when the scoped Chromium is installed. */
-export const NODE_FORMATS = ['svg', 'emf', 'eps', 'eps-cmyk', 'html', 'json', 'csv', 'ics', 'vcf', 'txt', 'md'];
 
 export function exportableFormats(manifest: Manifest): string[] {
   // Every declared format is now offerable: engine-native ones render DOM-free, the rest
@@ -85,8 +81,10 @@ export async function renderSvg(runtime: Runtime, dom: JSDOM): Promise<string | 
 }
 
 /** Output size options for an export (mirrors the web/CLI: width/height are values in
- *  `unit`; a physical unit qualifies them so the engine converts per format). */
-export interface ExportDims { width?: number; height?: number; unit?: string; dpi?: number; c2paDays?: number }
+ *  `unit`; a physical unit qualifies them so the engine converts per format). Extends
+ *  the shared render dims (incl. the `password` PDF-lock param) with the TUI's
+ *  Content-Credentials window. */
+export interface ExportDims extends RenderDims { c2paDays?: number }
 
 /**
  * Export the current state to `outPath` in `format`, honouring optional output
@@ -109,23 +107,15 @@ export async function exportToFile(
       try {
         // Match the web/CLI tools.lolly.export enrichment: context + date + output
         // size + the scalar-input digest, so a TUI-made asset inspects as richly.
-        const inputs = summarizeInputs(runtime.getModel());
-        const sizeLine = (typeof dims.width === 'number' && dims.width > 0 && typeof dims.height === 'number' && dims.height > 0)
-          ? (dims.unit && dims.unit !== 'px' ? `${dims.width} × ${dims.height} ${dims.unit} @ ${dims.dpi || 300} DPI` : `${dims.width} × ${dims.height} px`)
-          : undefined;
-        out = await embedC2pa(bytes, fmt, {
-          title: (manifest as { name?: string }).name ?? (manifest as { id: string }).id,
-          claimGenerator: 'Lolly lolly.tools',
-          generatorInfo: { name: 'Lolly', version: ENGINE_VERSION },
-          environment: {
-            surface: 'tui', engine: `node ${process.version}`, os: process.platform, format: fmt,
-            tool: (manifest as { name?: string }).name ?? (manifest as { id: string }).id,
-            date: new Date().toISOString(),
-            ...(sizeLine ? { dimensions: sizeLine } : {}),
-            ...(Object.keys(inputs).length ? { inputs } : {}),
-          },
-          dates: { notBefore: new Date(Date.now() - 60_000), notAfter: new Date(Date.now() + dims.c2paDays * 86_400_000) },
-        });
+        // buildExportC2paOpts (shared with the CLI) also attaches the profile author
+        // under the `useDetails` opt-in — same gate as every other shell.
+        const profile = (await getProfile()) as Profile;
+        out = await embedC2pa(bytes, fmt, buildExportC2paOpts({
+          surface: 'tui',
+          manifest: manifest as { id: string; name?: string },
+          model: runtime.getModel(),
+          format: fmt, dims, days: dims.c2paDays, profile,
+        }));
       } catch { /* non-fatal — write the unstamped bytes */ }
     }
     const buf = Buffer.from(out);
@@ -145,7 +135,7 @@ export async function exportToFile(
   if (isCaptureTool(manifest)) {
     const { captureUrl, captureParamsFrom } = await import('./url-capture.ts');
     const params = captureParamsFrom(runtime.getModel() as Array<{ id: string; value: unknown }>);
-    const cdims = await pxDims(dims, manifest);
+    const cdims = pxDims(dims, manifest as { render?: { width?: number; height?: number } });
     const { bytes } = await captureUrl(params, fmt, cdims);
     return write(bytes);
   }
@@ -172,7 +162,7 @@ export async function exportToFile(
   if (fmt === 'png') {
     const svg = await renderSvg(runtime, dom);
     if (svg) {
-      const { width, height } = await pxDims(dims, manifest);
+      const { width, height } = pxDims(dims, manifest as { render?: { width?: number; height?: number } });
       const png = await rasterizeSvgToPng(svg, width, height);
       return write(png);
     }
@@ -180,56 +170,8 @@ export async function exportToFile(
 
   // 4. Everything else (jpg/webp/pdf/video, and HTML-layout raster): drive the built web
   //    shell in Chromium so the bytes are identical to a web/desktop Download.
-  const { renderViaWebShell } = await import('./webshell-render.ts');
+  const { renderViaWebShell } = await import('@lolly-tools/node-shell/webshell-render');
   const id = (manifest as { id: string }).id;
   const { bytes } = await renderViaWebShell(id, currentQuery(runtime), fmt, dims);
   return write(bytes);
-}
-
-/** Resolve export dims to plain pixels for the URL-capture viewport (converts a
- *  physical unit like mm via the engine's own unit math; falls back to the tool's
- *  render size). */
-async function pxDims(dims: ExportDims, manifest: Manifest): Promise<{ width: number; height: number; dpi: number }> {
-  const { parseDimension, toPixels } = await import('@lolly/engine');
-  const dpi = dims.dpi && dims.dpi > 0 ? dims.dpi : 300;
-  const render = (manifest as { render?: { width?: number; height?: number } }).render ?? {};
-  const toPx = (v: number | undefined, fallback: number): number => {
-    if (!(typeof v === 'number' && v > 0)) return fallback;
-    const u = dims.unit || 'px';
-    if (u === 'px') return Math.round(v);
-    const d = parseDimension(`${v}${u}`);
-    return d ? Math.round(toPixels(d, dpi)) : Math.round(v);
-  };
-  return { width: toPx(dims.width, render.width ?? 1280), height: toPx(dims.height, render.height ?? 720), dpi };
-}
-
-/** Rasterise an SVG string to a `width`×`height` px PNG via resvg (pure Rust, no browser).
- *  resvg's `fitTo` can only constrain ONE axis, so to honour BOTH requested dimensions we
- *  set the root's width/height to the exact target box and render at that intrinsic size —
- *  the SVG's own viewBox + preserveAspectRatio then place the content (letterbox/meet as the
- *  tool authored it), matching the web/desktop raster rather than dropping the height.
- *  Text renders from the catalog fonts; the SVG's own background/transparency is kept. */
-async function rasterizeSvgToPng(svg: string, width: number, height: number): Promise<Uint8Array> {
-  const { Resvg } = await import('@resvg/resvg-js');
-  const w = Math.max(1, Math.round(width));
-  const h = Math.max(1, Math.round(height));
-  const m = svg.match(/<svg\b([^>]*)>/);
-  let sized = svg;
-  if (m) {
-    let attrs = m[1]!;
-    // Keep a viewBox (defines the content coordinate space); synthesise one from the
-    // root's own width/height if it lacks one, so the content still scales to the box.
-    if (!/\bviewBox=/.test(attrs)) {
-      const ow = attrs.match(/\bwidth="([\d.]+)"/)?.[1];
-      const oh = attrs.match(/\bheight="([\d.]+)"/)?.[1];
-      if (ow && oh) attrs += ` viewBox="0 0 ${ow} ${oh}"`;
-    }
-    attrs = attrs.replace(/\s(width|height)="[^"]*"/g, '');   // drop native size, keep viewBox + PAR
-    sized = svg.replace(/<svg\b[^>]*>/, `<svg${attrs} width="${w}" height="${h}">`);
-  }
-  const r = new Resvg(sized, {
-    fitTo: { mode: 'original' },
-    font: { fontDirs: [FONTS_DIR], loadSystemFonts: true },
-  });
-  return r.render().asPng();
 }

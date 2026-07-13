@@ -13,7 +13,7 @@ import {
 } from 'pdf-lib';
 import type { PDFContext, PDFObject } from 'pdf-lib';
 import { interpretPdfPage, parseToUnicode, toUnicodeDecoder, finalizeBoxes, safeColor } from '@lolly/engine';
-import type { PdfNode, PdfFontInfo, PdfXObject } from '@lolly/engine';
+import type { PdfNode, PdfFontInfo, PdfXObject, DesignMapOptions } from '@lolly/engine';
 
 export interface DesignImport { boxes: object[]; width: number; height: number; background: string }
 
@@ -21,8 +21,11 @@ type Ref = PDFObject | null | undefined;
 interface ImportNode extends PdfNode { image?: unknown }
 interface Resources { fonts: Record<string, PdfFontInfo>; xobjects: Record<string, PdfXObject>; extgstates: Record<string, { ca?: number; CA?: number }>; ocgs: Record<string, string> }
 
-/** Parse PDF/.ai bytes into a Layout Studio boxes array (first page). */
-export async function parsePdfBytes(bytes: Uint8Array, warn: (m: string) => void = () => {}): Promise<DesignImport> {
+/** Parse PDF/.ai bytes into a Layout Studio boxes array (first page). `map` is the
+ *  target tool's brand vocabulary (font select values + addKinds seed colours) —
+ *  see designMapFromManifest in import-design.ts; unset fields fall back to the
+ *  engine's neutral lolly-start defaults. */
+export async function parsePdfBytes(bytes: Uint8Array, warn: (m: string) => void = () => {}, map?: DesignMapOptions): Promise<DesignImport> {
   let doc: PDFDocument;
   try {
     doc = await PDFDocument.load(bytes, { ignoreEncryption: true, throwOnInvalidObject: false, updateMetadata: false });
@@ -53,7 +56,7 @@ export async function parsePdfBytes(bytes: Uint8Array, warn: (m: string) => void
     else if (n._imageXObject) { n.kind = 'box'; n.fill = ''; delete n._imageXObject; }
   }
 
-  const boxes = finalizeBoxes(nodes, { prefix: 'p' });
+  const boxes = finalizeBoxes(nodes, { prefix: 'p', ...map });
   if (!boxes.length) throw new Error('Couldn’t find any importable artwork on the first page.');
   return { boxes, width: Math.max(1, Math.round(mb.width)), height: Math.max(1, Math.round(mb.height)), background: '#ffffff' };
 }
