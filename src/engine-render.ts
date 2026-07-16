@@ -4,13 +4,15 @@
  * mountTool → createRuntime; renderSvg turns the current state into an SVG string
  * (for the terminal preview); exportToFile writes a real file via the Node bridge.
  */
-import { loadTool, createRuntime, parseUrlState, serializeUrlState, embedC2pa, C2PA_FORMATS } from '@lolly/engine';
+import { loadTool, createRuntime, parseUrlState, serializeUrlState, expandQuery, normalizeLang, embedC2pa, C2PA_FORMATS } from '@lolly/engine';
+import type { UrlState } from '../../../engine/src/url-mode.ts';
 import { writeFile, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 // The DOM-free/raster format split + the resvg fast path + the export C2PA payload,
 // shared with the CLI (one implementation, no drift).
 import { NODE_FORMATS, pxDims, rasterizeSvgToPng } from '@lolly-tools/node-shell/raster';
 import { buildExportC2paOpts } from '@lolly-tools/node-shell/c2pa-opts';
+import { assertRenderOk } from '@lolly-tools/node-shell/render-integrity';
 import type { RenderDims } from '@lolly-tools/node-shell/webshell-render';
 import { toolFetchFile } from './catalog.ts';
 import { getProfile } from './store.ts';
@@ -20,14 +22,28 @@ import type { JSDOM } from 'jsdom';
 export type Runtime = Awaited<ReturnType<typeof createRuntime>>;
 export type Manifest = Awaited<ReturnType<typeof loadTool>>['manifest'];
 
-/** Mount a tool, optionally seeded from a saved session's URL-state `query`. */
+/** What a mount yields: the runtime, its manifest, and the FULL reserved URL state from
+ *  the share link (so the caller can seed the export panel + know the requested language),
+ *  not just the input values. */
+export interface MountResult { runtime: Runtime; manifest: Manifest; reserved: UrlState }
+
+/** Mount a tool, optionally seeded from a share link / saved session's URL-state `query`. */
 export async function mountTool(
   toolId: string, host: HostV1, query = '',
-): Promise<{ runtime: Runtime; manifest: Manifest }> {
-  const tool = await loadTool(toolId, toolFetchFile());
-  const values = query ? parseUrlState(query, tool.manifest).values : {};
-  const runtime = await createRuntime(tool, host, values as Parameters<typeof createRuntime>[2]);
-  return { runtime, manifest: tool.manifest };
+): Promise<MountResult> {
+  // Expand a packed `z=` share link FIRST (mirrors shells/cli/src/run.ts) — a no-op on a
+  // readable or empty query. Without this the TUI silently loads a packed link at defaults.
+  const expanded = query ? await expandQuery(query) : '';
+  // Read `lang` before loadTool so a `?lang=de` link localizes the manifest via
+  // applyManifestI18n (same as the CLI's run.ts) — even a lang packed inside `z=`.
+  const lang = expanded ? normalizeLang(new URLSearchParams(expanded).get('lang')) ?? undefined : undefined;
+  const tool = await loadTool(toolId, toolFetchFile(), { lang });
+  // Keep the WHOLE parsed state, not just .values: the reserved export controls (format,
+  // dims, unit, dpi, c2pa, password, filename) seed the export panel instead of being
+  // silently dropped and reset to manifest defaults.
+  const reserved = parseUrlState(expanded, tool.manifest);
+  const runtime = await createRuntime(tool, host, reserved.values as Parameters<typeof createRuntime>[2]);
+  return { runtime, manifest: tool.manifest, reserved };
 }
 
 /** The current state as a URL query — what a saved session stores + reopens from. */
@@ -98,12 +114,14 @@ export async function exportToFile(
   await mkdir(dirname(outPath), { recursive: true });   // ensure the target folder exists
   const fmt = format.toLowerCase();
   const transform = isTransform(manifest);
-  const write = async (bytes: Uint8Array): Promise<number> => {
+  const write = async (bytes: Uint8Array, viaWebShell = false): Promise<number> => {
     // Optionally stamp Content Credentials (C2PA) as the LAST byte operation — same rule
     // as the CLI/web. NEVER on transform utilities (strip-data's whole job is to REMOVE
     // metadata). Ephemeral on-device cert; a clean warn-and-continue on any failure.
+    // The Tier-B (web shell) branch already stamped via the forwarded ?c2pa param, so it
+    // passes viaWebShell=true to skip re-stamping (avoids a double credential).
     let out = bytes;
-    if (dims.c2paDays && !transform && C2PA_FORMATS.includes(fmt)) {
+    if (dims.c2paDays && !transform && !viaWebShell && C2PA_FORMATS.includes(fmt)) {
       try {
         // Match the web/CLI tools.lolly.export enrichment: context + date + output
         // size + the scalar-input digest, so a TUI-made asset inspects as richly.
@@ -152,7 +170,11 @@ export async function exportToFile(
     const opts: { width?: string | number; height?: string | number; dpi?: number } = { width: qual(dims.width), height: qual(dims.height) };
     if (u !== 'px' && dims.dpi) opts.dpi = dims.dpi;
     const blob = await runtime.export(canvas, fmt, opts);
-    return write(new Uint8Array(await blob.arrayBuffer()));
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    // Fail loud: this is the runtime's own DOM-free output — refuse to write a file the
+    // render silently failed to produce (a swallowed onInit) rather than report success.
+    assertRenderOk({ hookErrors: runtime.hookErrors, format: fmt, bytes });
+    return write(bytes);
   }
 
   // 3b. PNG from an SVG-native tool: rasterise the engine's own SVG via resvg — no
@@ -164,6 +186,9 @@ export async function exportToFile(
     if (svg) {
       const { width, height } = pxDims(dims, manifest as { render?: { width?: number; height?: number } });
       const png = await rasterizeSvgToPng(svg, width, height);
+      // Tier A rasterises the runtime's own SVG, so a swallowed hook failure yields a
+      // blank PNG — gate it (the hookErrors signal catches what a byte-count can't).
+      assertRenderOk({ hookErrors: runtime.hookErrors, format: fmt, bytes: png });
       return write(png);
     }
   }
@@ -172,6 +197,11 @@ export async function exportToFile(
   //    shell in Chromium so the bytes are identical to a web/desktop Download.
   const { renderViaWebShell } = await import('@lolly-tools/node-shell/webshell-render');
   const id = (manifest as { id: string }).id;
-  const { bytes } = await renderViaWebShell(id, currentQuery(runtime), fmt, dims);
-  return write(bytes);
+  // Let the web shell be the single c2pa authority for this tier: forward the credential
+  // setting (c2paDays>0 ⇒ on at that lifetime; 0 ⇒ the tool's own default) and skip the
+  // Node re-stamp in write(). This also carries any bleed/marks/imprint/pressProfile the
+  // shared RenderDims holds through exportUrl.
+  const webDims = { ...dims, c2pa: dims.c2paDays ? true : undefined, c2paDays: dims.c2paDays };
+  const { bytes } = await renderViaWebShell(id, currentQuery(runtime), fmt, webDims);
+  return write(bytes, true);
 }

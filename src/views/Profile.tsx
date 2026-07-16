@@ -10,7 +10,7 @@ import TextInput from 'ink-text-input';
 import { readFile } from 'node:fs/promises';
 import { basename, dirname } from 'node:path';
 import { homedir } from 'node:os';
-import { verifyC2pa } from '@lolly/engine';
+import { verifyC2pa, c2paTrustAnchors } from '@lolly/engine';
 import { getProfile, setProfile, backupData, listSessions } from '../store.ts';
 import { exportSessions } from '../batch-export.ts';
 import { loadFavourites, loadHidden } from '../lib/asset-favourites.ts';
@@ -114,7 +114,11 @@ export function Profile({ bridge, onNav, onQuit }: { bridge: TuiBridge; onNav: (
       try {
         const abs = p.startsWith('~') && (p.length === 1 || p[1] === '/') ? homedir() + p.slice(1) : p;
         const bytes = new Uint8Array(await readFile(abs));
-        const r = await verifyC2pa(bytes) as { found?: boolean; state?: string; trusted?: boolean; madeWithLolly?: boolean };
+        // Pass the built-in trust list (same as `lolly validate` + the web /valid view),
+        // or a CA-signed asset that chains to a known anchor reads "untrusted cert" here
+        // while the CLI/web call it "trusted" — an inconsistent verdict on the exact
+        // feature meant to be authoritative.
+        const r = await verifyC2pa(bytes, { trustAnchors: c2paTrustAnchors() }) as { found?: boolean; state?: string; trusted?: boolean; madeWithLolly?: boolean };
         if (!r.found) { setStatus(`No Content Credentials found in ${p}.`); return; }
         setStatus(`✓ C2PA ${r.state}${r.madeWithLolly ? ' · made with Lolly' : ''} · ${r.trusted ? 'trusted' : 'untrusted cert'}`);
       } catch (e) { setStatus('Verify failed: ' + (e as Error).message); }

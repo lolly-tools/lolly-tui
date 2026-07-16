@@ -24,9 +24,9 @@ import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import { MultilineInput } from '../components/MultilineInput.tsx';
 import { join, basename, extname } from 'node:path';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { isToolUrl } from '@lolly/engine';
+import { isToolUrl, parseDataRows } from '@lolly/engine';
 import { loadAssets } from '../catalog.ts';
 import type { AssetRow } from '../catalog.ts';
 import { filterAssets, assetEmoji, assetDetail } from '../lib/asset-list.ts';
@@ -75,7 +75,7 @@ interface ModelItem {
 /** One "+ Add" choice for a blocks input (a discriminator value or a canvas kind). */
 interface AddKind { id: string; label: string; seed?: BlockRow }
 
-type Mode = 'browse' | 'editing' | 'editml' | 'naming' | 'addkind' | 'picking';
+type Mode = 'browse' | 'editing' | 'editml' | 'naming' | 'addkind' | 'picking' | 'importing';
 type Focus = 'inputs' | 'export' | 'preview';
 /** Block sub-editor position: `field < 0` ⇒ ROW list; `field >= 0` ⇒ one row's FIELDS. */
 type BlockNav = { row: number; field: number };
@@ -109,7 +109,7 @@ const UNITS = ['px', 'mm', 'cm', 'in', 'pt'];
 // Content Credentials (C2PA) validity choices; 0 = off. Stamped into the export as its
 // last byte-operation (svg/raster/pdf that have a C2PA container).
 const C2PA_DAYS = [0, 7, 30, 90, 365];
-type ExportKey = 'format' | 'width' | 'height' | 'unit' | 'dpi' | 'filename' | 'folder' | 'c2pa';
+type ExportKey = 'format' | 'width' | 'height' | 'unit' | 'dpi' | 'filename' | 'folder' | 'c2pa' | 'password';
 // Export-settings rows. `cycle` fields step with ←/→; `text` fields open an editor.
 const EXPORT_FIELDS: Array<{ key: ExportKey; label: string; kind: 'cycle' | 'text' }> = [
   { key: 'format', label: 'Format', kind: 'cycle' },
@@ -120,7 +120,16 @@ const EXPORT_FIELDS: Array<{ key: ExportKey; label: string; kind: 'cycle' | 'tex
   { key: 'filename', label: 'Filename', kind: 'text' },
   { key: 'folder', label: 'Folder', kind: 'text' },
   { key: 'c2pa', label: 'C2PA', kind: 'cycle' },
+  { key: 'password', label: 'Password', kind: 'text' },
 ];
+
+/** Map a parsed `?c2pa=` setting to a C2PA_DAYS index. On-with-no-lifetime (`?c2pa`) and
+ *  an unrecognised bucket both fall to the 30-day default; off/absent → 0. */
+function c2paIndexFromSetting(c: { on: boolean; days: number | null } | null): number {
+  if (!c || !c.on) return 0;
+  const i = c.days != null ? C2PA_DAYS.indexOf(c.days) : -1;
+  return i > 0 ? i : C2PA_DAYS.indexOf(30);
+}
 
 /** A single-line terminal input can't carry a real newline, so a literal `\n` typed
  *  into a longtext field becomes a line break on commit (a lone `\` before other chars
@@ -157,6 +166,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
   const [exportSel, setExportSel] = useState(0);
   const [mode, setMode] = useState<Mode>('browse');
   const [draft, setDraft] = useState('');
+  const [importId, setImportId] = useState('');   // blocks input awaiting a CSV/JSON import path
   // Block sub-editor state. `blk === null` → normal input list.
   const [blk, setBlk] = useState<BlockNav | null>(null);
   const [chooser, setChooser] = useState<{ kinds: AddKind[]; sel: number } | null>(null);
@@ -175,6 +185,12 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
   const [dpi, setDpi] = useState('300');
   const [c2paIdx, setC2paIdx] = useState(0);
   const [filename, setFilename] = useState('');
+  const [password, setPassword] = useState('');   // standard PDF open-password (from ?password= or typed)
+  const [linkKnobs, setLinkKnobs] = useState<string[]>([]);   // export knobs a share link pre-set (shown in the panel)
+  // Print-prep params a link carried (bleed/marks/imprint/CMYK press). The TUI has no UI
+  // rows for them, but they're threaded into the export dims so a colleague's print-ready
+  // link still exports print-ready — matching the CLI (which reads them from the URL).
+  const [linkPrint, setLinkPrint] = useState<{ bleed?: string; marks?: string; imprint?: boolean; pressProfile?: string }>({});
   const [outDir, setOutDir] = useState(defaultExportDir());
   const [showImage, setShowImage] = useState(false);
   const [previewScroll, setPreviewScroll] = useState(0);   // line offset when the preview is focused
@@ -301,12 +317,47 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
         const hydrated = m.runtime.getHydrated();
         const nextIc = docUtil && isInteractiveHtml(hydrated) ? createInteractive(hydrated, styleFrom(hydrated)) : null;
         setIc(nextIc); setIcSel(0); setIcEdit(null); setIcRev(0);
+        // Seed the export panel from the share link's reserved params (link wins over the
+        // manifest default), so a colleague's ?format=pdf&w=1200&unit=mm&c2pa=30 link opens
+        // pre-dialled instead of silently resetting every knob. (lang is already applied —
+        // mountTool passed it to loadTool, so the sidebar labels arrive translated.)
+        const rv = m.reserved;
         const r = (m.manifest as { render?: { width?: number; height?: number; unit?: string } }).render ?? {};
-        setWidth(r.width ? String(r.width) : '');
-        setHeight(r.height ? String(r.height) : '');
-        setUnitIdx(Math.max(0, UNITS.indexOf(r.unit ?? 'px')));
-        setFilename(slug(m.manifest.name ?? toolId));
-        setStatus(''); setRev(x => x + 1);
+        const fmts = exportableFormats(m.manifest);
+        // Tolerate the jpg/jpeg synonym split so a link's format resolves to the tool's
+        // declared spelling instead of silently falling back to the first format.
+        const want = rv.format ? rv.format.toLowerCase() : null;
+        const alias = want === 'jpeg' ? 'jpg' : want === 'jpg' ? 'jpeg' : null;
+        const fi = want ? (fmts.indexOf(want) >= 0 ? fmts.indexOf(want) : (alias ? fmts.indexOf(alias) : -1)) : -1;
+        setFmtIdx(fi >= 0 ? fi : 0);
+        setWidth(rv.width != null ? String(rv.width) : r.width ? String(r.width) : '');
+        setHeight(rv.height != null ? String(rv.height) : r.height ? String(r.height) : '');
+        setUnitIdx(Math.max(0, UNITS.indexOf(rv.unit ?? r.unit ?? 'px')));
+        setDpi(rv.dpi != null ? String(rv.dpi) : '300');
+        setC2paIdx(c2paIndexFromSetting(rv.c2pa));
+        setFilename(rv.filename ? rv.filename : slug(m.manifest.name ?? toolId));
+        setPassword(rv.password ?? '');
+        // Print-prep from the link (pdf/pdf-cmyk/cmyk-tiff via the Tier-B web shell).
+        const marksCsv = rv.marks
+          ? [rv.marks.crop && 'crop', rv.marks.registration && 'reg', rv.marks.bleed && 'bleed', rv.marks.colorBars && 'bars', rv.marks.provenance && 'prov'].filter(Boolean).join(',')
+          : undefined;
+        setLinkPrint({ bleed: rv.bleed ?? undefined, marks: marksCsv || undefined, imprint: rv.imprint ?? undefined, pressProfile: rv.profile ?? undefined });
+        // Name which knobs the link set, for a visible "review this" cue (and to annotate
+        // the Export panel title). A failed render (P1: onInit threw, e.g. a capability this
+        // shell can't fulfil) takes priority — surface it loudly instead of a silent preview.
+        const knobs = [
+          rv.format && 'format', (rv.width != null || rv.height != null) && 'size',
+          rv.unit && 'unit', rv.dpi != null && 'dpi', rv.c2pa?.on && 'credential',
+          rv.password && 'password', rv.filename && 'filename', rv.lang && `lang ${rv.lang}`,
+          rv.bleed && 'bleed', rv.marks && 'marks', rv.imprint && 'imprint', rv.profile && 'press',
+        ].filter(Boolean) as string[];
+        setLinkKnobs(knobs);
+        const hookErr = m.runtime.hookErrors[0];
+        setStatus(
+          hookErr ? `⚠ Tool failed to render — ${hookErr.message} (this shell may not support it)`
+          : knobs.length ? `Link set: ${knobs.join(', ')} — review Export ↹` : '',
+        );
+        setRev(x => x + 1);
       } catch (e) { if (alive) setStatus('Failed to load: ' + (e as Error).message); }
     })();
     return () => { alive = false; };
@@ -559,6 +610,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
       case 'dpi': return dpi;
       case 'filename': return outName;
       case 'folder': return outDir;
+      case 'password': return password;
       default: return '';
     }
   }
@@ -572,6 +624,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
       case 'filename': return outName;
       case 'folder': return outDir;
       case 'c2pa': { const d = C2PA_DAYS[c2paIdx] ?? 0; return d === 0 ? 'off' : `on · ${d}-day cert`; }
+      case 'password': return password ? '•'.repeat(Math.min(8, password.length)) + ' · pdf lock' : (fmt === 'pdf' ? 'none' : 'pdf only');
       default: return '';
     }
   }
@@ -595,6 +648,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
       else if (f.key === 'dpi') { const n = parseInt(raw.trim(), 10); setDpi(Number.isFinite(n) && n > 0 ? String(n) : '300'); }
       else if (f.key === 'filename') setFilename(raw.trim());
       else if (f.key === 'folder') setOutDir(raw.trim() || defaultExportDir());
+      else if (f.key === 'password') setPassword(raw.trim());
       return;
     }
     const item = model[sel]; if (!item || !runtime) return;
@@ -622,16 +676,53 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
       setStatus(`✓ Loaded ${basename(abs)} (${bytes.length.toLocaleString()} bytes)`);
     } catch (e) { setStatus('File error: ' + (e as Error).message); }
   }
+  // Import a CSV/JSON file into the pending `blocks` input (importId), replacing its rows
+  // with the parsed data via the shared engine importer (parseDataRows).
+  function importNow(path: string): void {
+    setMode('browse');
+    const item = model.find(m => m.id === importId);
+    const p = path.trim();
+    if (!runtime || !item || item.type !== 'blocks' || !p) return;
+    (async () => {
+      try {
+        const text = await readFile(expandHome(p), 'utf8');
+        const { rows, truncated } = parseDataRows(text, { fields: (item.fields ?? []) as Array<{ id: string; label?: string; type?: string }> });
+        await runtime.setInput(item.id, rows as never);
+        refresh();
+        setStatus(`✓ Imported ${rows.length} row${rows.length === 1 ? '' : 's'} → ${item.id}${truncated ? ' (row cap reached)' : ''}`);
+      } catch (e) { setStatus('Import failed: ' + (e as Error).message); }
+    })();
+  }
   // Resolve a raw asset id / lolly.tools URL to the AssetRef the template consumes.
   // setInput/setField do NOT re-resolve refs (only createRuntime does), so we resolve
   // here the same way createRuntime would: a tool URL → compose.renderUrl (renders the
   // linked tool to an embeddable ref; Node handles svg children, raster throws); anything
   // else → a catalog asset id via host.assets.get.
   async function resolveAssetRef(raw: string): Promise<InputValue> {
-    const ref = isToolUrl(raw)
-      ? await bridge.host.compose?.renderUrl?.(raw)
-      : await bridge.host.assets.get(raw);
-    if (!ref) throw new Error(isToolUrl(raw) ? 'tool render unavailable in this shell' : `asset “${raw}” not found`);
+    if (isToolUrl(raw)) {
+      const ref = await bridge.host.compose?.renderUrl?.(raw);
+      if (!ref) throw new Error('tool render unavailable in this shell');
+      return ref as InputValue;
+    }
+    // Your OWN local image (~/pics/logo.png) → a self-contained baked ref, same as the CLI.
+    const abs = expandHome(raw);
+    try {
+      const st = await stat(abs);
+      if (st.isFile()) {
+        const mime = mimeForFile(abs);
+        const isVec = mime === 'image/svg+xml';
+        const bytes = new Uint8Array(await readFile(abs));
+        return {
+          source: 'user', id: basename(abs),
+          type: isVec ? 'vector' : 'raster',
+          format: isVec ? 'svg' : (mime.split('/')[1] || 'png'),
+          url: `data:${mime};base64,${Buffer.from(bytes).toString('base64')}`,
+          meta: { baked: true, name: basename(abs) },
+        } as InputValue;
+      }
+    } catch { /* not a local file → treat as a catalog id */ }
+    const ref = await bridge.host.assets.get(raw);
+    if (!ref) throw new Error(`asset “${raw}” not found`);
     return ref as InputValue;
   }
   // Set a top-level `asset` input by id / URL (empty clears it).
@@ -693,6 +784,10 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
       height: Number.isFinite(h) && h > 0 ? h : undefined,
       unit, dpi: Number.isFinite(dpiN) && dpiN > 0 ? dpiN : 300,
       c2paDays: C2PA_DAYS[c2paIdx] || undefined,
+      // Standard PDF open-password (basic lock) — pdf only; threads to the web-shell tier.
+      password: fmt === 'pdf' && password ? password : undefined,
+      // Print-prep carried from a share link (no TUI rows yet) — honoured on the Tier-B tier.
+      ...linkPrint,
     };
     const inBytes = fileRef?.size;   // transform utilities: for the before→after headline
     (async () => {
@@ -902,6 +997,9 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
     if (key.upArrow || input === 'k') { setSel(s => Math.max(0, s - 1)); return; }
     if (key.downArrow || input === 'j') { setSel(s => Math.min(Math.max(0, model.length - 1), s + 1)); return; }
     const item = model[sel]; if (!item || !runtime) return;
+    // `i` imports a CSV/JSON file into a blocks input (chart/table data) — the same engine
+    // importer the web offers, so you fill rows from a spreadsheet instead of typing them.
+    if (item.type === 'blocks' && (input === 'i' || input === 'I')) { setImportId(item.id); setDraft(''); setMode('importing'); return; }
     if (item.type === 'blocks' && (key.return || input === 'e')) {
       const order = treeEntries(item).map(e => e.idx);
       setBlk({ row: order[0] ?? 0, field: -1 });
@@ -1084,7 +1182,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
       <Text color={theme.dim} wrap="truncate-end">{`${fmtEmoji(fmt)} ${fmt.toUpperCase()} · ${width || 'native'}×${height || 'native'} ${unit} → ${outPath}   ·   tab to change · x to export`}</Text>
     </Panel>
   ) : (
-    <Panel title="Export settings" width={stacked || docFull ? cols : rightW} height={docFull ? docExportH : exportH} active={focus === 'export' && !blk}>
+    <Panel title={linkKnobs.length ? 'Export settings · from link' : 'Export settings'} width={stacked || docFull ? cols : rightW} height={docFull ? docExportH : exportH} active={focus === 'export' && !blk}>
       {EXPORT_FIELDS.map((f, i) => {
         const active = focus === 'export' && !blk && i === exportSel;
         const editingThis = active && mode === 'editing' && f.kind === 'text';
@@ -1192,6 +1290,8 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
     <Box height={1} paddingX={1}>
       {mode === 'naming'
         ? <Text><Text color={theme.accentName}>Save project as: </Text><TextInput value={draft} onChange={setDraft} onSubmit={saveNow} /></Text>
+        : mode === 'importing'
+        ? <Text><Text color={theme.accentName}>Import data (CSV/JSON) file: </Text><TextInput value={draft} onChange={setDraft} onSubmit={importNow} /></Text>
         : <Text color={status.startsWith('✓') ? theme.accentName : theme.dim} wrap="truncate-end">{status || ' '}</Text>}
     </Box>
   );

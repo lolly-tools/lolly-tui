@@ -55,29 +55,9 @@ export async function createTuiBridge(profile: Profile = {}): Promise<TuiBridge>
     async writeImage(): Promise<{ method: 'clipboard' | 'download' }> { throw new Error('Image clipboard unavailable in the terminal'); },
   };
 
-  // The CLI stubs host.capture with a thrower (no browser). The TUI ships a real one,
-  // backed by the scoped Chromium (browser.ts) — so a live-URL screenshot works in the
-  // terminal. url-shot's export routes through it directly (see engine-render), but
-  // exposing it here also fulfils the 'capture' capability for any tool that calls it.
-  host.capture = {
-    async page(spec) {
-      const { captureUrl } = await import('./url-capture.ts');
-      const { bytes, mime } = await captureUrl(
-        {
-          url: spec.url, scrollDepth: spec.scrollDepth ?? 0, waitMs: spec.waitMs ?? 500,
-          css: spec.css ?? '',
-          cropLeft: spec.crop?.left ?? 0, cropRight: spec.crop?.right ?? 0,
-          cropTop: spec.crop?.top ?? 0, cropBottom: spec.crop?.bottom ?? 0,
-          recolor: 'none', tintColor: '#111111', hue: 0, // recolor 'none' ⇒ tint unused; neutral placeholder
-          zoom: 1, // zoom rides in spec.css (html{zoom:…}) — don't double-apply
-        },
-        'png',
-        { width: spec.width, height: spec.height ?? spec.width, dpi: (spec.dpr ?? 1) * 96 },
-      );
-      const url = `data:${mime};base64,${Buffer.from(bytes).toString('base64')}`;
-      return { source: 'remote', id: `capture:${spec.url}`, type: 'raster', format: 'png', url, width: spec.width, height: spec.height };
-    },
-  };
+  // host.capture is now real in the shared CLI bridge (backed by the same scoped Chromium),
+  // so the TUI inherits it — no override needed. url-shot's export still routes straight to
+  // captureUrl in engine-render.ts; this fulfils the 'capture' capability for hook callers.
 
   return { host, dom, logs };
 }
