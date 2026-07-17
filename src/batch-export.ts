@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * Folder export — render every saved session in a folder subtree to a node-format file
- * (html fallback) and pack the whole tree into ONE zip on the user's Desktop.
+ * Folder export — render every saved session in a folder subtree to a file and pack the
+ * whole tree into ONE zip on the user's Desktop.
  *
- * HARD CONSTRAINT: node-only, offline, no browser. The TUI can render svg/text/emf/eps
- * and HTML, but NOT raster/pdf/video. So a folder export zips the node-renderable outputs
- * (html fallback for HTML-layout tools, exactly as ToolView.doExport does). PDF passwords
- * are moot — no pdf is produced — but the ZIP itself can be password-locked via the
- * engine's zip-crypto framer (buildEncryptedZip), and that works here.
+ * Formats: svg/emf/eps and the data formats render DOM-free in pure Node; raster/pdf/
+ * video render via the scoped Chromium tier once `lolly install-browser` has run (the
+ * same Tier-B path a single ToolView export uses — exportToFile routes per format).
+ * When a row's format needs the browser tier and it isn't installed, the row falls back
+ * to HTML and SAYS so (BatchMember.note, surfaced in the progress log and the zip's
+ * lolly.txt) rather than failing the batch or degrading silently. The ZIP itself can be
+ * password-locked via the engine's zip-crypto framer (buildEncryptedZip).
  *
  * The render itself is delegated to engine-render.exportToFile so the exportFile hook +
  * physical-unit handling stay in one place; this module re-implements only the html
@@ -34,6 +36,9 @@ export interface BatchMember {
   bytes: number;
   ok: boolean;
   reason?: string;        // set when ok === false
+  /** Set when ok but degraded: the html fallback (browser tier missing / no vector
+   *  output) or a format the tool doesn't declare. Surfaced per-row, never silent. */
+  note?: string;
 }
 
 export interface ExportFolderOpts {
@@ -60,14 +65,19 @@ export interface ExportFolderResult {
   members: BatchMember[]; // every attempted session (ok + skipped), in render order
 }
 
-// Already-compressed payloads gain nothing from deflate; store them (method 0). The node
-// shell only ever produces text/svg (all compressible), but keep the set for correctness
-// and future formats — mirrors pro/zip.ts.
+// Already-compressed payloads gain nothing from deflate; store them (method 0) — Tier-B
+// members (png/jpg/pdf/video) are already compressed bytes. Mirrors pro/zip.ts.
 const STORE_EXT = new Set(['png', 'jpg', 'jpeg', 'webp', 'avif', 'gif', 'pdf', 'webm', 'mp4']);
 const extOf = (name: string): string => {
   const i = name.lastIndexOf('.');
   return i >= 0 ? name.slice(i + 1).toLowerCase() : '';
 };
+
+/** One log/manifest line for a member: ✓ ok · ⚠ ok but degraded (note says why) · ✗ skipped. */
+function memberLine(m: BatchMember): string {
+  if (!m.ok) return `✗ ${m.zipPath}  (skipped: ${m.reason ?? 'unknown'})`;
+  return m.note ? `⚠ ${m.zipPath}  (${m.note})` : `✓ ${m.zipPath}`;
+}
 
 /** The small credit/manifest dropped into every zip. */
 function manifestText(zipName: string, folderName: string, members: BatchMember[]): string {
@@ -75,6 +85,7 @@ function manifestText(zipName: string, folderName: string, members: BatchMember[
   const date = now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   const time = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
   const ok = members.filter(m => m.ok);
+  const degraded = ok.some(m => m.note);
   const lines = [
     'Lolly  •  https://lolly.tools',
     '-'.repeat(56),
@@ -85,15 +96,56 @@ function manifestText(zipName: string, folderName: string, members: BatchMember[
     '',
     `[ ${ok.length} file${ok.length === 1 ? '' : 's'} included ]`,
     '',
-    ...members.map(m => (m.ok ? `✓ ${m.zipPath}` : `✗ ${m.zipPath}  (skipped: ${m.reason ?? 'unknown'})`)),
+    ...members.map(memberLine),
     '',
     '-'.repeat(56),
-    'Rendered in the terminal (node-only): raster/PDF/video export is unavailable',
-    'here — only svg/text/emf/eps/html. PDF password-protection is therefore moot;',
-    'the ZIP itself is the lock when a password is set.',
+    'Rendered in the terminal. svg/emf/eps and data formats render natively;',
+    'png/jpg/pdf/video use the scoped browser tier (one-time `lolly install-browser`).',
+    ...(degraded ? [
+      'Rows marked ⚠ degraded — each note says why; a missing browser tier falls',
+      'back to HTML.',
+    ] : []),
+    'A password locks the ZIP itself.',
     '',
   ];
   return lines.join('\n') + '\n';
+}
+
+/**
+ * The (ref, relDir) render plan for `folder`'s whole subtree: each folder id maps to its
+ * slugged path relative to `folder` (root → ''), BFS so a parent's relDir is set before
+ * its children, single-membership honoured (first folder wins). Exported so the Projects
+ * view's format step can inspect the SAME session set exportFolder will render.
+ */
+export function planFolderRefs(folder: Folder, allFolders: Folder[]): { ref: string; relDir: string }[] {
+  const relDirOf = new Map<string, string>();
+  relDirOf.set(folder.id, '');
+  const order: string[] = [folder.id];
+  const queue: string[] = [folder.id];
+  while (queue.length) {
+    const pid = queue.shift()!;
+    const base = relDirOf.get(pid)!;
+    for (const child of childFolders(allFolders, pid)) {
+      if (relDirOf.has(child.id)) continue; // guard against malformed cycles
+      relDirOf.set(child.id, base ? `${base}/${slug(child.name)}` : slug(child.name));
+      order.push(child.id);
+      queue.push(child.id);
+    }
+  }
+  const byId = new Map(allFolders.map(f => [f.id, f]));
+  const planned: { ref: string; relDir: string }[] = [];
+  const claimed = new Set<string>();
+  for (const id of order) {
+    const f = byId.get(id);
+    if (!f) continue;
+    const relDir = relDirOf.get(id) ?? '';
+    for (const it of f.items) {
+      if (claimed.has(it.ref)) continue;
+      claimed.add(it.ref);
+      planned.push({ ref: it.ref, relDir });
+    }
+  }
+  return planned;
 }
 
 /**
@@ -109,36 +161,8 @@ export async function exportFolder(
   allFolders: Folder[],
   opts: ExportFolderOpts = {},
 ): Promise<ExportFolderResult> {
-  // 1. Enumerate the subtree, mapping each folder id → its slugged path relative to
-  //    `folder` (root → ''). BFS so a parent's relDir is set before its children.
-  const relDirOf = new Map<string, string>();
-  relDirOf.set(folder.id, '');
-  const order: string[] = [folder.id];
-  const queue: string[] = [folder.id];
-  while (queue.length) {
-    const pid = queue.shift()!;
-    const base = relDirOf.get(pid)!;
-    for (const child of childFolders(allFolders, pid)) {
-      if (relDirOf.has(child.id)) continue; // guard against malformed cycles
-      relDirOf.set(child.id, base ? `${base}/${slug(child.name)}` : slug(child.name));
-      order.push(child.id);
-      queue.push(child.id);
-    }
-  }
-  // 2. Collect (ref, relDir) in render order, honouring single-membership (first wins).
-  const byId = new Map(allFolders.map(f => [f.id, f]));
-  const planned: { ref: string; relDir: string }[] = [];
-  const claimed = new Set<string>();
-  for (const id of order) {
-    const f = byId.get(id);
-    if (!f) continue;
-    const relDir = relDirOf.get(id) ?? '';
-    for (const it of f.items) {
-      if (claimed.has(it.ref)) continue;
-      claimed.add(it.ref);
-      planned.push({ ref: it.ref, relDir });
-    }
-  }
+  // 1-2. Plan the subtree walk (shared with the view's format step).
+  const planned = planFolderRefs(folder, allFolders);
 
   // 3. Resolve sessions.
   const byslot = new Map<string, SavedSession>((await listSessions()).map(s => [s.slot, s]));
@@ -179,8 +203,7 @@ export async function exportFolder(
       const member = await renderSessionTo(host, dom, session, relNoExt, stage, want, dims);
       members.push(member);
       done++;
-      const prefix = member.ok ? (member.format === 'html' && want !== 'html' ? '⚠' : '✓') : '✗';
-      opts.onProgress?.(done, total, `${prefix} ${member.zipPath}`);
+      opts.onProgress?.(done, total, memberLine(member));
     }
 
     // 6-8. Pack the staged files into one zip on disk.
@@ -239,6 +262,21 @@ async function packMembersToZip(
 }
 
 /**
+ * When a render fails for a reason HTML can still satisfy, the batch falls back rather
+ * than skipping the row — but must SAY so. Returns the per-row note (surfaced in the
+ * progress log and the zip's lolly.txt), or null when the failure is real and the row
+ * should skip. Two honest cases: the format needs the browser tier and it isn't
+ * installed, or the tool is HTML-layout with no <svg> for a vector format.
+ */
+function htmlFallbackNote(msg: string): string | null {
+  if (/install[ :-]browser|browser engine|Chromium|build:web|web shell/i.test(msg))
+    return 'html fallback — run lolly install-browser for png/pdf';
+  if (/<svg>|requires an/i.test(msg))
+    return 'html fallback — this tool has no vector output';
+  return null;
+}
+
+/**
  * Render ONE session into `stage/<relNoExt>.<fmt>`, with the same html fallback as
  * ToolView.doExport. Never throws — a failure returns a skipped BatchMember so the batch
  * continues.
@@ -257,22 +295,22 @@ async function renderSessionTo(
     const { runtime, manifest } = await mountTool(session.toolId, host, session.query);
     const avail = exportableFormats(manifest);
     const fmt = avail.includes(want) ? want : (avail[0] ?? 'html');
+    // A batch-wide format won't exist on every tool — substitute, but say so per-row.
+    const substituted = fmt !== want ? `${want} not offered by this tool — rendered ${fmt}` : undefined;
     const zipPath = `${relNoExt}.${fmt}`;
     try {
       const bytes = await exportToFile(runtime, dom, manifest, fmt, join(stage, zipPath), dims);
       if (!existsSync(join(stage, zipPath))) throw new Error('render produced no file');
-      return { slot: session.slot, label, zipPath, format: fmt, bytes, ok: true };
+      return { slot: session.slot, label, zipPath, format: fmt, bytes, ok: true, note: substituted };
     } catch (e) {
-      const msg = (e as Error).message;
-      // svg/emf/eps need an <svg> the tool may not have; raster/pdf/capture need the
-      // browser tier (Chromium / built web shell) that a given machine may not have set
-      // up. For a BULK export, fall back to HTML (always renderable) so every member
-      // still produces a file rather than failing — interactive doExport surfaces the
-      // actionable "run install:browser" message instead.
-      if (/<svg>|requires an|browser engine|install:browser|build:web|Chromium|web shell/i.test(msg) && fmt !== 'html') {
+      // For a BULK export, fall back to HTML (always renderable) so every member still
+      // produces a file rather than failing — but carry the honest reason per-row;
+      // interactive doExport surfaces the actionable "run install:browser" message instead.
+      const note = fmt !== 'html' ? htmlFallbackNote((e as Error).message) : null;
+      if (note) {
         const htmlPath = `${relNoExt}.html`;
         const bytes = await exportToFile(runtime, dom, manifest, 'html', join(stage, htmlPath), dims);
-        return { slot: session.slot, label, zipPath: htmlPath, format: 'html', bytes, ok: true };
+        return { slot: session.slot, label, zipPath: htmlPath, format: 'html', bytes, ok: true, note };
       }
       throw e;
     }
@@ -287,7 +325,9 @@ export interface BatchRunOpts {
   zipTier?: ZipTier;
   outDir?: string;
   name?: string;          // zip base name (default 'batch' / 'selection')
-  format?: string;        // for the session-set path (rows carry their own format)
+  /** Preferred format: the session-set path's format, and the default for CSV rows
+   *  without their own `format` column. Default 'svg'. */
+  format?: string;
   unit?: string;
   dpi?: number;
 }
@@ -310,9 +350,9 @@ export async function exportBatchRows(
       const row = rows[i]!;
       const base = row.filename ? slug(row.filename.replace(/\.[^.]+$/, '')) : slug(row.toolId);
       const relNoExt = `${String(i + 1).padStart(pad, '0')}-${base || 'row'}`;
-      const member = await renderRowTo(host, dom, row, relNoExt, stage);
+      const member = await renderRowTo(host, dom, row, relNoExt, stage, opts.format);
       members.push(member);
-      opts.onProgress?.(i + 1, rows.length, `${member.ok ? '✓' : '✗'} ${member.zipPath}`);
+      opts.onProgress?.(i + 1, rows.length, memberLine(member));
     }
     return packMembersToZip(stage, members, {
       zipName: `${slug(opts.name ?? 'batch') || 'batch'}.zip`,
@@ -324,27 +364,29 @@ export async function exportBatchRows(
   }
 }
 
-/** Render one CSV batch row (its params become the mount query; per-row format/size honoured). */
+/** Render one CSV batch row (its params become the mount query; per-row format/size
+ *  honoured; `fallbackFormat` covers rows without their own format column). */
 async function renderRowTo(
-  host: HostV1, dom: JSDOM, row: BatchRow, relNoExt: string, stage: string,
+  host: HostV1, dom: JSDOM, row: BatchRow, relNoExt: string, stage: string, fallbackFormat?: string,
 ): Promise<BatchMember> {
   const query = new URLSearchParams(row.params).toString();
-  const want = row.format ?? 'svg';
+  const want = row.format ?? fallbackFormat ?? 'svg';
   const dims = { width: row.width, height: row.height, unit: row.unit ?? 'px', dpi: row.dpi ?? 300 };
   try {
     const { runtime, manifest } = await mountTool(row.toolId, host, query);
     const avail = exportableFormats(manifest);
     const fmt = avail.includes(want) ? want : (avail[0] ?? 'html');
+    const substituted = fmt !== want ? `${want} not offered by this tool — rendered ${fmt}` : undefined;
     const zipPath = `${relNoExt}.${fmt}`;
     try {
       const bytes = await exportToFile(runtime, dom, manifest, fmt, join(stage, zipPath), dims);
-      return { slot: relNoExt, label: row.toolId, zipPath, format: fmt, bytes, ok: true };
+      return { slot: relNoExt, label: row.toolId, zipPath, format: fmt, bytes, ok: true, note: substituted };
     } catch (e) {
-      const msg = (e as Error).message;
-      if (/<svg>|requires an|browser engine|install:browser|build:web|Chromium|web shell/i.test(msg) && fmt !== 'html') {
+      const note = fmt !== 'html' ? htmlFallbackNote((e as Error).message) : null;
+      if (note) {
         const htmlPath = `${relNoExt}.html`;
         const bytes = await exportToFile(runtime, dom, manifest, 'html', join(stage, htmlPath), dims);
-        return { slot: relNoExt, label: row.toolId, zipPath: htmlPath, format: 'html', bytes, ok: true };
+        return { slot: relNoExt, label: row.toolId, zipPath: htmlPath, format: 'html', bytes, ok: true, note };
       }
       throw e;
     }
@@ -379,7 +421,7 @@ export async function exportSessions(
       const member = await renderSessionTo(host, dom, session, base, stage, opts.format ?? 'svg', dims);
       members.push(member);
       done++;
-      opts.onProgress?.(done, sessions.length, `${member.ok ? '✓' : '✗'} ${member.zipPath}`);
+      opts.onProgress?.(done, sessions.length, memberLine(member));
     }
     return packMembersToZip(stage, members, {
       zipName: `${slug(opts.name ?? 'selection') || 'selection'}.zip`,

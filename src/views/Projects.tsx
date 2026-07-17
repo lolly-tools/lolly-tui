@@ -9,12 +9,13 @@
  * Keys: n new folder · ⏎/o open (folder → drill in, session → reopen the tool) ·
  * m move a session into a folder · R rename folder · d delete (folder = cascade, the
  * sessions it held survive as uncategorised; session = delete the saved project) ·
- * e export the folder → optional ZIP password → a live <Progress> panel that renders
- * the whole subtree to one nested .zip on the Desktop.
+ * e export the folder → pick a format → optional ZIP password → a live <Progress>
+ * panel that renders the whole subtree to one nested .zip on the Desktop.
  *
- * HARD CONSTRAINT (node-only, offline): the export can only produce svg/text/emf/eps
- * and an HTML fallback — never raster/pdf/video. PDF password-protection is therefore
- * moot (no PDF is produced); the ZIP password IS the lock and works. See batch-export.ts.
+ * Formats: the picker offers the union of the batch's tools' declared formats (svg
+ * default). svg/emf/eps + data formats render DOM-free; raster/pdf/video render via the
+ * scoped Chromium tier once `lolly install-browser` has run — when it's missing, those
+ * rows fall back to HTML with a per-row note (never silently). See batch-export.ts.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
@@ -23,6 +24,9 @@ import { basename, dirname, resolve } from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { parseBatchCsv, type BatchRow } from '@lolly/engine';
+import { NODE_FORMATS } from '@lolly-tools/node-shell/raster';
+import { browserInstalled } from '@lolly-tools/node-shell/browsers';
+import { loadTools } from '../catalog.ts';
 import { listSessions, deleteSession, renameSession, configDir } from '../store.ts';
 import type { SavedSession } from '../store.ts';
 import {
@@ -30,7 +34,7 @@ import {
   childFolders, uncategorisedRefs, folderPath,
 } from '../folders.ts';
 import type { Folder } from '../folders.ts';
-import { exportFolder, exportSessions, exportBatchRows } from '../batch-export.ts';
+import { exportFolder, exportSessions, exportBatchRows, planFolderRefs } from '../batch-export.ts';
 import { useTermSize } from '../hooks.ts';
 import { theme } from '../theme.ts';
 import { Tabs } from '../components/Tabs.tsx';
@@ -41,7 +45,7 @@ import type { TuiBridge } from '../bridge.ts';
 import type { NavTarget } from '../nav.ts';
 
 type Row = { kind: 'folder'; folder: Folder } | { kind: 'session'; session: SavedSession };
-type Mode = 'browse' | 'creating' | 'renaming' | 'confirmDelFolder' | 'confirmDelSession' | 'moveTarget' | 'zipPrompt' | 'csvPrompt' | 'exporting';
+type Mode = 'browse' | 'creating' | 'renaming' | 'confirmDelFolder' | 'confirmDelSession' | 'moveTarget' | 'formatPick' | 'zipPrompt' | 'csvPrompt' | 'exporting';
 interface Prog { done: number; total: number; log: string[]; finished: boolean; note?: string }
 // What a pending zip export renders: a folder subtree, a ticked set of sessions, or CSV rows.
 type PendingBatch =
@@ -77,6 +81,11 @@ export function Projects({ toolName, folderId, bridge, onOpen, onOpenFolder, onN
   // Multiselect: ticked session slots (space), and the pending batch a zip export renders.
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [pending, setPending] = useState<PendingBatch | null>(null);
+  // Format step: declared formats per tool (catalog index), the staged batch's choices,
+  // and the highlighted one. The chosen format is passed to the batch as opts.format.
+  const [toolFormats, setToolFormats] = useState<Map<string, string[]>>(new Map());
+  const [fmtChoices, setFmtChoices] = useState<string[]>([]);
+  const [fmtSel, setFmtSel] = useState(0);
 
   const reload = async (): Promise<void> => {
     const s = await listSessions();
@@ -86,6 +95,13 @@ export function Projects({ toolName, folderId, bridge, onOpen, onOpenFolder, onN
     setFolders(f);
   };
   useEffect(() => { void reload(); }, []);
+  useEffect(() => {
+    // Declared formats from the generated catalog index (same source as the gallery) —
+    // on any read failure the picker still offers svg + the html fallback.
+    loadTools()
+      .then(ts => setToolFormats(new Map(ts.map(t => [t.id, (t.formats ?? []).map(f => f.toLowerCase())]))))
+      .catch(() => {});
+  }, []);
 
   const fs = folders ?? [];
   const ss = sessions ?? [];
@@ -150,6 +166,29 @@ export function Projects({ toolName, folderId, bridge, onOpen, onOpenFolder, onN
     moveItem(s.slot, target.id).then(() => reload().then(() => setStatus(`✓ Moved “${s.label}” → ${target.id == null ? 'Uncategorised' : target.name}`))).catch(e => setStatus((e as Error).message));
   };
 
+  // Stage a batch → the format step. Choices = the union of the batch's tools' declared
+  // formats plus the universal html fallback, svg preselected (node-native first).
+  const stageBatch = (batch: PendingBatch): void => {
+    let ids: string[];
+    if (batch.kind === 'csv') ids = batch.rows.map(r => r.toolId);
+    else if (batch.kind === 'sessions') ids = batch.sessions.map(s => s.toolId);
+    else {
+      const bySlot = new Map(ss.map(s => [s.slot, s]));
+      ids = planFolderRefs(batch.folder, fs).map(p => bySlot.get(p.ref)?.toolId).filter((id): id is string => Boolean(id));
+    }
+    const union = new Set<string>();
+    for (const id of ids) for (const f of toolFormats.get(id) ?? ['svg']) union.add(f);
+    if (union.size === 0) union.add('svg');
+    union.add('html');
+    const rank = (f: string): number => (f === 'svg' ? 0 : NODE_FORMATS.includes(f) ? 1 : f === 'png' ? 2 : 3);
+    const choices = [...union].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+    setPending(batch);
+    setFmtChoices(choices);
+    setFmtSel(Math.max(0, choices.indexOf('svg')));
+    setDraft('');
+    setMode('formatPick');
+  };
+
   const submitZip = (v: string): void => {
     const password = v.trim();
     setDraft('');
@@ -159,7 +198,7 @@ export function Projects({ toolName, folderId, bridge, onOpen, onOpenFolder, onN
     setProg({ done: 0, total: 0, log: [], finished: false });
     const onProgress = (done: number, total: number, label: string): void =>
       setProg(p => ({ done, total, log: [...(p?.log ?? []), label], finished: false }));
-    const common = { zipPassword: password || undefined, onProgress };
+    const common = { zipPassword: password || undefined, onProgress, format: fmtChoices[fmtSel] ?? 'svg' };
     const run =
       batch.kind === 'folder' ? exportFolder(bridge.host, bridge.dom, batch.folder, fs, common)
       : batch.kind === 'sessions' ? exportSessions(bridge.host, bridge.dom, batch.sessions, { ...common, name: batch.name })
@@ -181,9 +220,8 @@ export function Projects({ toolName, folderId, bridge, onOpen, onOpenFolder, onN
       .then(text => {
         const rows = parseBatchCsv(text);
         if (!rows.length) { setMode('browse'); setStatus('No rows found (need a header row with a toolId column).'); return; }
-        setPending({ kind: 'csv', rows, name: basename(path).replace(/\.[^.]+$/, '') });
-        setStatus(`${rows.length} row${rows.length === 1 ? '' : 's'} loaded — set a zip password (blank = none).`);
-        setMode('zipPrompt');
+        setStatus(`${rows.length} row${rows.length === 1 ? '' : 's'} loaded — pick the default format (rows with their own format column keep it).`);
+        stageBatch({ kind: 'csv', rows, name: basename(path).replace(/\.[^.]+$/, '') });
       })
       .catch(e => { setMode('browse'); setStatus(`Couldn't read ${raw}: ${(e as Error).message}`); });
   };
@@ -191,9 +229,20 @@ export function Projects({ toolName, folderId, bridge, onOpen, onOpenFolder, onN
 
   // ── Input ──────────────────────────────────────────────────────────────────
   useInput((input, key) => {
-    // Text-entry modes: the TextInput owns typing/submit; esc cancels.
+    // Text-entry modes: the TextInput owns typing/submit; esc cancels (zipPrompt steps
+    // back to the format picker — the batch is still staged).
     if (mode === 'creating' || mode === 'renaming' || mode === 'zipPrompt' || mode === 'csvPrompt') {
-      if (key.escape) { setMode('browse'); setDraft(''); setRenameId(null); setRenameSlot(null); if (mode !== 'zipPrompt') setPending(null); }
+      if (key.escape) {
+        if (mode === 'zipPrompt') { setDraft(''); setMode('formatPick'); return; }
+        setMode('browse'); setDraft(''); setRenameId(null); setRenameSlot(null); setPending(null);
+      }
+      return;
+    }
+    if (mode === 'formatPick') {
+      if (key.escape) { setMode('browse'); setPending(null); setExportTarget(null); setStatus(''); return; }
+      if (key.upArrow || input === 'k') { setFmtSel(s => Math.max(0, s - 1)); return; }
+      if (key.downArrow || input === 'j') { setFmtSel(s => Math.min(Math.max(0, fmtChoices.length - 1), s + 1)); return; }
+      if (key.return || input === 'o' || input === 'l') { setDraft(''); setStatus(''); setMode('zipPrompt'); return; }
       return;
     }
     if (mode === 'exporting') {
@@ -238,8 +287,9 @@ export function Projects({ toolName, folderId, bridge, onOpen, onOpenFolder, onN
       const bySlot = new Map(ss.map(s => [s.slot, s]));
       const picked = [...selected].map(slot => bySlot.get(slot)).filter((s): s is SavedSession => Boolean(s));
       if (!picked.length) { setStatus('Tick projects with space first, then b to batch them into one zip.'); return; }
-      setPending({ kind: 'sessions', sessions: picked, name: `selection-${picked.length}` });
-      setDraft(''); setStatus(''); setMode('zipPrompt'); return;
+      setStatus('');
+      stageBatch({ kind: 'sessions', sessions: picked, name: `selection-${picked.length}` });
+      return;
     }
     if ((key.return || key.rightArrow || input === 'o' || input === 'l')) {
       if (row?.kind === 'folder') { onOpenFolder(row.folder.id); setSel(0); setStatus(''); return; }
@@ -266,7 +316,9 @@ export function Projects({ toolName, folderId, bridge, onOpen, onOpenFolder, onN
       // Export the folder you're IN; at the top level, the highlighted folder row.
       const folder = currentFolder ?? (row?.kind === 'folder' ? row.folder : null);
       if (!folder) { setStatus('Open a folder (or highlight one) to export it as a zip.'); return; }
-      setExportTarget(folder); setPending({ kind: 'folder', folder }); setDraft(''); setStatus(''); setMode('zipPrompt'); return;
+      setExportTarget(folder); setStatus('');
+      stageBatch({ kind: 'folder', folder });
+      return;
     }
   });
 
@@ -342,11 +394,43 @@ export function Projects({ toolName, folderId, bridge, onOpen, onOpenFolder, onN
   );
 
   const batchName = pending?.kind === 'folder' ? pending.folder.name : pending ? pending.name : (exportTarget?.name ?? '');
+
+  // Format step: node-native formats need nothing; png rasterises the tool's own SVG via
+  // resvg when it has one; everything else needs the scoped Chromium (Tier B).
+  const browserOk = browserInstalled();
+  const tierNoteOf = (f: string): string => {
+    if (NODE_FORMATS.includes(f)) return '';
+    if (f === 'png') return browserOk ? 'browser tier for HTML-layout tools' : 'browser tier missing — HTML-layout tools fall back to HTML';
+    return browserOk ? 'browser tier' : 'browser tier missing — falls back to HTML';
+  };
+  const fVisible = Math.max(1, bodyH - 2 - (pending?.kind === 'csv' ? 1 : 0));
+  const fStart = Math.max(0, Math.min(fmtSel, Math.max(0, fmtChoices.length - fVisible)));
+  const fWindow = fmtChoices.slice(fStart, fStart + fVisible);
+  const formatPanel = (
+    <Panel title={`Export format · ${batchName}`} width={cols} height={bodyH} active>
+      {fWindow.map((f, i) => {
+        const active = fStart + i === fmtSel;
+        const tier = tierNoteOf(f);
+        return (
+          <Text key={f} wrap="truncate-end">
+            <Text color={active ? theme.accentName : undefined}>{active ? '▸ ' : '  '}{f.toUpperCase()}</Text>
+            {tier ? <Text color={theme.dim}>{'  · ' + tier}</Text> : null}
+          </Text>
+        );
+      })}
+      {pending?.kind === 'csv'
+        ? <Text color={theme.dim} wrap="truncate-end">CSV rows with their own format column keep it — this picks the default.</Text>
+        : null}
+    </Panel>
+  );
+
   const body = mode === 'exporting' && prog
     ? <Progress title={`Export · ${batchName}`} done={prog.done} total={prog.total} log={prog.log} width={cols} height={bodyH} active finished={prog.finished} note={prog.note} />
     : mode === 'moveTarget'
       ? movePanel
-      : listPanel;
+      : mode === 'formatPick'
+        ? formatPanel
+        : listPanel;
 
   const promptRow = (
     <Box height={1} paddingX={1}>
@@ -378,13 +462,19 @@ export function Projects({ toolName, folderId, bridge, onOpen, onOpenFolder, onN
 function footerNote(mode: Mode, delFolder: Folder | null, delSession: SavedSession | null): string | undefined {
   if (mode === 'confirmDelFolder') return `Delete folder “${delFolder?.name}” and its sub-folders? The saved projects survive as uncategorised.  y / n`;
   if (mode === 'confirmDelSession') return `Delete project “${delSession?.label}”?  y / n`;
-  if (mode === 'zipPrompt') return 'PDF passwords don’t apply here (node renders no PDF) — this locks the .zip itself. Enter with a blank leaves it unlocked.';
+  if (mode === 'zipPrompt') return 'This locks the .zip itself. Enter with a blank leaves it unlocked.';
+  if (mode === 'formatPick') {
+    return browserInstalled()
+      ? 'j/k choose · ⏎ use format · esc cancel'
+      : 'Browser tier not installed — run `lolly install-browser` once for raster/pdf/video; those rows fall back to HTML.';
+  }
   if (mode === 'moveTarget') return 'j/k choose · ⏎ move here · esc cancel';
   return undefined;
 }
 
 function footerShortcuts(mode: Mode, folderId: string | null, prog: Prog | null): Array<{ key: string; label: string }> {
   if (mode === 'exporting') return prog?.finished ? [{ key: '⏎', label: 'close' }] : [{ key: '…', label: 'exporting — please wait' }];
+  if (mode === 'formatPick') return [{ key: 'j/k', label: 'choose' }, { key: '⏎', label: 'use format' }, { key: 'esc', label: 'cancel' }];
   if (mode === 'moveTarget') return [{ key: 'j/k', label: 'choose' }, { key: '⏎', label: 'move here' }, { key: 'esc', label: 'cancel' }];
   return [
     { key: 'j/k', label: 'move' },

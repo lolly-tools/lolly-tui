@@ -16,6 +16,9 @@ import { assertRenderOk } from '@lolly-tools/node-shell/render-integrity';
 import type { RenderDims } from '@lolly-tools/node-shell/webshell-render';
 import { toolFetchFile } from './catalog.ts';
 import { getProfile } from './store.ts';
+// The same allowlisted-fetch module every shell builds host.net from (the CLI
+// bridge imports it the same way) — one matcher, no drift.
+import { createNetAPI } from '../../web/src/bridge/net.ts';
 import type { HostV1, Profile } from '../../../engine/src/bridge/host-v1.ts';
 import type { JSDOM } from 'jsdom';
 
@@ -38,6 +41,11 @@ export async function mountTool(
   // applyManifestI18n (same as the CLI's run.ts) — even a lang packed inside `z=`.
   const lang = expanded ? normalizeLang(new URLSearchParams(expanded).get('lang')) ?? undefined : undefined;
   const tool = await loadTool(toolId, toolFetchFile(), { lang });
+  // Rebuild host.net from THIS tool's network.allowlist (mirrors the web view's
+  // post-load reassignment): the TUI's bridge is created once at boot, before any
+  // manifest is known, so without this every host.net fetch would reject and a
+  // network-capable tool that renders in the web shell would fail here.
+  host.net = createNetAPI({ allowlist: tool.manifest.network?.allowlist });
   // Keep the WHOLE parsed state, not just .values: the reserved export controls (format,
   // dims, unit, dpi, c2pa, password, filename) seed the export panel instead of being
   // silently dropped and reset to manifest defaults.
