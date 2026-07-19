@@ -32,6 +32,7 @@ import type { AssetRow } from '../catalog.ts';
 import { filterAssets, assetEmoji, assetDetail } from '../lib/asset-list.ts';
 import { loadFavourites, loadHidden, sortFavouritesFirst } from '../lib/asset-favourites.ts';
 import { mountTool, renderSvg, exportToFile, exportableFormats, currentQuery, isTransform, isCaptureTool } from '../engine-render.ts';
+import { matchedExportFormat } from '@lolly-tools/node-shell/raster';
 import type { Runtime, Manifest } from '../engine-render.ts';
 import { svgToCells } from '../terminal-image.ts';
 import type { Cell } from '../terminal-image.ts';
@@ -109,7 +110,11 @@ const UNITS = ['px', 'mm', 'cm', 'in', 'pt'];
 // Content Credentials (C2PA) validity choices; 0 = off. Stamped into the export as its
 // last byte-operation (svg/raster/pdf that have a C2PA container).
 const C2PA_DAYS = [0, 7, 30, 90, 365];
-type ExportKey = 'format' | 'width' | 'height' | 'unit' | 'dpi' | 'filename' | 'folder' | 'c2pa' | 'password';
+// Raster formats the durable (neural TrustMark) credential can ride in — mirrors the
+// web shell's isDurableFmt (views/tool-actions.ts). The embed itself runs in the web
+// shell's export path, so a durable export always routes via the Tier-B browser.
+const DURABLE_FMTS = ['png', 'jpg', 'jpeg', 'webp', 'avif', 'tiff'];
+type ExportKey = 'format' | 'width' | 'height' | 'unit' | 'dpi' | 'filename' | 'folder' | 'c2pa' | 'durable' | 'password';
 // Export-settings rows. `cycle` fields step with ←/→; `text` fields open an editor.
 const EXPORT_FIELDS: Array<{ key: ExportKey; label: string; kind: 'cycle' | 'text' }> = [
   { key: 'format', label: 'Format', kind: 'cycle' },
@@ -120,6 +125,7 @@ const EXPORT_FIELDS: Array<{ key: ExportKey; label: string; kind: 'cycle' | 'tex
   { key: 'filename', label: 'Filename', kind: 'text' },
   { key: 'folder', label: 'Folder', kind: 'text' },
   { key: 'c2pa', label: 'C2PA', kind: 'cycle' },
+  { key: 'durable', label: 'Durable', kind: 'cycle' },
   { key: 'password', label: 'Password', kind: 'text' },
 ];
 
@@ -184,6 +190,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
   const [unitIdx, setUnitIdx] = useState(0);
   const [dpi, setDpi] = useState('300');
   const [c2paIdx, setC2paIdx] = useState(0);
+  const [durableOn, setDurableOn] = useState(false);   // opt-in durable (TrustMark) credential — raster only, Tier-B
   const [filename, setFilename] = useState('');
   const [password, setPassword] = useState('');   // standard PDF open-password (from ?password= or typed)
   const [linkKnobs, setLinkKnobs] = useState<string[]>([]);   // export knobs a share link pre-set (shown in the panel)
@@ -222,6 +229,9 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
   // guards refresh() from recording the restore itself as a new edit.
   const histRef = useRef<{ stack: Array<{ q: string; snap: Array<{ id: string; value: unknown }> }>; idx: number }>({ stack: [], idx: -1 });
   const restoringRef = useRef(false);
+  // matchExportFormat: while unlocked, the export format tracks the flagged input's
+  // uploaded file format (web parity). A ?format= link or a manual Format cycle locks it.
+  const fmtLockedRef = useRef(false);
 
   // Preview priority (utility = the output is all there is): a utility tool's result
   // is its PRIMARY pane — auto-shown, and shown even on a narrow terminal — while a
@@ -329,12 +339,18 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
         const want = rv.format ? rv.format.toLowerCase() : null;
         const alias = want === 'jpeg' ? 'jpg' : want === 'jpg' ? 'jpeg' : null;
         const fi = want ? (fmts.indexOf(want) >= 0 ? fmts.indexOf(want) : (alias ? fmts.indexOf(alias) : -1)) : -1;
-        setFmtIdx(fi >= 0 ? fi : 0);
+        // No explicit ?format= on the link → a matchExportFormat input's uploaded file
+        // picks the default (a seeded ?source=./pic.jpg opens dialled to jpg).
+        const mf = fi < 0 ? matchedExportFormat(m.manifest, m.runtime.getModel()) : null;
+        const mi = mf ? fmts.indexOf(mf) : -1;
+        setFmtIdx(fi >= 0 ? fi : mi >= 0 ? mi : 0);
+        fmtLockedRef.current = fi >= 0;
         setWidth(rv.width != null ? String(rv.width) : r.width ? String(r.width) : '');
         setHeight(rv.height != null ? String(rv.height) : r.height ? String(r.height) : '');
         setUnitIdx(Math.max(0, UNITS.indexOf(rv.unit ?? r.unit ?? 'px')));
         setDpi(rv.dpi != null ? String(rv.dpi) : '300');
         setC2paIdx(c2paIndexFromSetting(rv.c2pa));
+        setDurableOn(Boolean(rv.durable));
         setFilename(rv.filename ? rv.filename : slug(m.manifest.name ?? toolId));
         setPassword(rv.password ?? '');
         // Print-prep from the link (pdf/pdf-cmyk/cmyk-tiff via the Tier-B web shell).
@@ -349,7 +365,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
           rv.format && 'format', (rv.width != null || rv.height != null) && 'size',
           rv.unit && 'unit', rv.dpi != null && 'dpi', rv.c2pa?.on && 'credential',
           rv.password && 'password', rv.filename && 'filename', rv.lang && `lang ${rv.lang}`,
-          rv.bleed && 'bleed', rv.marks && 'marks', rv.imprint && 'imprint', rv.profile && 'press',
+          rv.bleed && 'bleed', rv.marks && 'marks', rv.imprint && 'imprint', rv.durable && 'durable', rv.profile && 'press',
         ].filter(Boolean) as string[];
         setLinkKnobs(knobs);
         const hookErr = m.runtime.hookErrors[0];
@@ -426,7 +442,18 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
   }, [rev, isUtility, transform, capture, stacked, runtime, bridge.dom, previewCols, previewRows]);
 
   function refresh(): void {
-    if (runtime) { const m = runtime.getModel(); setModel(m as unknown as ModelItem[]); if (!restoringRef.current) recordSnapshot(runtime); }
+    if (runtime) {
+      const m = runtime.getModel();
+      setModel(m as unknown as ModelItem[]);
+      if (!restoringRef.current) recordSnapshot(runtime);
+      // matchExportFormat: until the user (or a link) picks a format, keep the export
+      // format tracking the flagged input's uploaded file (a new .jpg source → jpg).
+      if (!fmtLockedRef.current && manifest) {
+        const mf = matchedExportFormat(manifest, m);
+        const mi = mf ? exportableFormats(manifest).indexOf(mf) : -1;
+        if (mi >= 0) setFmtIdx(mi);
+      }
+    }
     setRev(r => r + 1); setShareUrl('');
   }
   // Push the current state onto the undo stack (deduped by serialised query, capped, and
@@ -624,6 +651,9 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
       case 'filename': return outName;
       case 'folder': return outDir;
       case 'c2pa': { const d = C2PA_DAYS[c2paIdx] ?? 0; return d === 0 ? 'off' : `on · ${d}-day cert`; }
+      case 'durable': return DURABLE_FMTS.includes(fmt)
+        ? (durableOn ? 'on · in-pixel mark' : 'off')
+        : (durableOn ? 'on (raster formats only)' : 'raster only');
       case 'password': return password ? '•'.repeat(Math.min(8, password.length)) + ' · pdf lock' : (fmt === 'pdf' ? 'none' : 'pdf only');
       default: return '';
     }
@@ -784,6 +814,9 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
       height: Number.isFinite(h) && h > 0 ? h : undefined,
       unit, dpi: Number.isFinite(dpiN) && dpiN > 0 ? dpiN : 300,
       c2paDays: C2PA_DAYS[c2paIdx] || undefined,
+      // Durable credential: only meaningful for raster formats the mark can ride in;
+      // routes the export via the Tier-B web shell, whose durableEmbedCanvas embeds it.
+      durable: durableOn && DURABLE_FMTS.includes(fmt) ? true : undefined,
       // Standard PDF open-password (basic lock) — pdf only; threads to the web-shell tier.
       password: fmt === 'pdf' && password ? password : undefined,
       // Print-prep carried from a share link (no TUI rows yet) — honoured on the Tier-B tier.
@@ -984,9 +1017,10 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
       const f = EXPORT_FIELDS[exportSel]; if (!f) return;
       if (f.kind === 'cycle' && (key.leftArrow || key.rightArrow || key.return || input === 'h' || input === 'l')) {
         const fwd = key.rightArrow || key.return || input === 'l';
-        if (f.key === 'format' && formats.length) setFmtIdx(i => (i + (fwd ? 1 : -1) + formats.length) % formats.length);
+        if (f.key === 'format' && formats.length) { setFmtIdx(i => (i + (fwd ? 1 : -1) + formats.length) % formats.length); fmtLockedRef.current = true; }
         else if (f.key === 'unit') setUnitIdx(i => (i + (fwd ? 1 : -1) + UNITS.length) % UNITS.length);
         else if (f.key === 'c2pa') setC2paIdx(i => (i + (fwd ? 1 : -1) + C2PA_DAYS.length) % C2PA_DAYS.length);
+        else if (f.key === 'durable') setDurableOn(v => !v);
         return;
       }
       if ((key.return || input === 'e') && f.kind === 'text') { setDraft(exportFieldValue(f.key)); setMode('editing'); }

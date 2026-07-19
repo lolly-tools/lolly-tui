@@ -188,8 +188,10 @@ export async function exportToFile(
   // 3b. PNG from an SVG-native tool: rasterise the engine's own SVG via resvg — no
   //     browser and no built web shell needed (the fast, always-available raster path,
   //     mirroring the MCP server's Tier A+resvg). resvg emits PNG only; jpg/webp/pdf
-  //     fall through to the web-shell tier below.
-  if (fmt === 'png') {
+  //     fall through to the web-shell tier below. An imprint or durable-credential
+  //     request also falls through — resvg can't embed either pixel mark, only the
+  //     web shell's export path can (same rule as shells/cli/src/raster.ts).
+  if (fmt === 'png' && !dims.imprint && !dims.durable) {
     const svg = await renderSvg(runtime, dom);
     if (svg) {
       const { width, height } = pxDims(dims, manifest as { render?: { width?: number; height?: number } });

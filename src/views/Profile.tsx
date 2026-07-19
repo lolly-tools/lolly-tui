@@ -10,7 +10,7 @@ import TextInput from 'ink-text-input';
 import { readFile } from 'node:fs/promises';
 import { basename, dirname } from 'node:path';
 import { homedir } from 'node:os';
-import { verifyC2pa, c2paTrustAnchors } from '@lolly/engine';
+import { verifyC2pa, resolveVerdict, defaultTrustAnchors } from '@lolly/engine';
 import { getProfile, setProfile, backupData, listSessions } from '../store.ts';
 import { exportSessions } from '../batch-export.ts';
 import { loadFavourites, loadHidden } from '../lib/asset-favourites.ts';
@@ -25,6 +25,17 @@ import { Footer } from '../components/Footer.tsx';
 import { Progress } from '../components/Progress.tsx';
 
 interface Prog { done: number; total: number; log: string[]; finished: boolean; note?: string }
+
+// One rendered line of the verify report; tones map onto the theme palette.
+interface VLine { text: string; tone: 'good' | 'warn' | 'bad' | 'dim' | 'fg' }
+interface VReport { path: string; lines: VLine[] }
+
+const V_TONE_COLOR = { good: theme.accentName, warn: theme.warn, bad: theme.danger, dim: theme.dim, fg: theme.fg } as const;
+
+// Every claim/signer string is attacker-controlled bytes from the file being checked —
+// strip control chars (incl. ESC) so a crafted manifest can't inject terminal sequences
+// or shred the Ink layout. Same rule as the CLI validator.
+const vclean = (v: unknown): string => String(v).replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ');
 
 interface Field { key: string; label: string; type: 'text' | 'bool' }
 const FIELDS: Field[] = [
@@ -46,6 +57,12 @@ export function Profile({ bridge, onNav, onQuit }: { bridge: TuiBridge; onNav: (
   const [verifying, setVerifying] = useState(false);   // 'v' — check a file's Content Credentials
   const [vdraft, setVdraft] = useState('');
   const [prog, setProg] = useState<Prog | null>(null); // 'b' — back up + render every project (live)
+  const [vreport, setVreport] = useState<VReport | null>(null);   // the full verify report panel
+  const [vscroll, setVscroll] = useState(0);
+  // Report window height: Tabs(1) + panel borders(2) + the Panel's own title row(1) +
+  // footer(1) around the line list — get this wrong by one and Yoga silently collapses
+  // the first line (the headline) instead of clipping the last.
+  const vInnerH = Math.max(4, rows - 6);
 
   useEffect(() => { void getProfile().then(setP); }, []);
 
@@ -58,6 +75,13 @@ export function Profile({ bridge, onNav, onQuit }: { bridge: TuiBridge; onNav: (
     if (!profile) return;
     // While rendering everything, the Progress panel owns the screen — only dismiss it once done.
     if (prog) { if (prog.finished && (key.return || key.escape || input.length > 0)) setProg(null); return; }
+    // The verify report owns the screen: j/k scroll, esc/⏎/q close.
+    if (vreport) {
+      if (key.escape || key.return || input === 'q') { setVreport(null); return; }
+      if (key.downArrow || input === 'j') { setVscroll(s => Math.min(Math.max(0, vreport.lines.length - vInnerH), s + 1)); return; }
+      if (key.upArrow || input === 'k') { setVscroll(s => Math.max(0, s - 1)); return; }
+      return;
+    }
     if (editing) { if (key.escape) setEditing(false); return; }
     if (verifying) { if (key.escape) setVerifying(false); return; }
     if (input === '1') return onNav('tools');
@@ -104,8 +128,11 @@ export function Profile({ bridge, onNav, onQuit }: { bridge: TuiBridge; onNav: (
         .catch(e => setProg(p => ({ done: p?.done ?? 0, total: p?.total ?? 0, log: p?.log ?? [], finished: true, note: `✗ ${(e as Error).message}` })));
     })();
   }
-  // Verify a file's Content Credentials (the web /valid view) — same engine verifier the
-  // /valid page + `lolly validate` use.
+  // Verify a file's Content Credentials — the same engine verifier + shared verdict
+  // ladder (resolveVerdict) the web /valid view and `lolly validate` render, shown as a
+  // full report panel: headline, claim facts, per-check list, then the deep pixel scan.
+  // Trust policy matches the CLI validator (no Lolly-root pinning — the documented
+  // terminal-surface split; see engine/src/c2pa-verdict.ts).
   function doVerify(path: string): void {
     setVerifying(false);
     const p = path.trim(); if (!p) return;
@@ -114,13 +141,83 @@ export function Profile({ bridge, onNav, onQuit }: { bridge: TuiBridge; onNav: (
       try {
         const abs = p.startsWith('~') && (p.length === 1 || p[1] === '/') ? homedir() + p.slice(1) : p;
         const bytes = new Uint8Array(await readFile(abs));
-        // Pass the built-in trust list (same as `lolly validate` + the web /valid view),
-        // or a CA-signed asset that chains to a known anchor reads "untrusted cert" here
-        // while the CLI/web call it "trusted" — an inconsistent verdict on the exact
-        // feature meant to be authoritative.
-        const r = await verifyC2pa(bytes, { trustAnchors: c2paTrustAnchors() }) as { found?: boolean; state?: string; trusted?: boolean; madeWithLolly?: boolean };
-        if (!r.found) { setStatus(`No Content Credentials found in ${p}.`); return; }
-        setStatus(`✓ C2PA ${r.state}${r.madeWithLolly ? ' · made with Lolly' : ''} · ${r.trusted ? 'trusted' : 'untrusted cert'}`);
+        const report = await verifyC2pa(bytes, { trustAnchors: defaultTrustAnchors({ includeLollyRoot: false }) });
+        const v = resolveVerdict(report);
+        const lines: VLine[] = [];
+        const push = (text: string, tone: VLine['tone'] = 'fg'): void => { lines.push({ text, tone }); };
+        // Headline — the CLI validator's rendering of the shared ladder, including its
+        // two documented quirks (parts elevated to a headline; no separate "Verified").
+        if (v.state === 'lolly') push('✦ Made with Lolly — credential intact, file unchanged since export', 'good');
+        else if (v.state === 'delivered') push('◆ Delivered by Lolly — verified authentic official asset; delivered by Lolly, not created by it', 'good');
+        else if (v.state === 'likelyLolly') push('~ Likely made with Lolly — the credential checks out and records a Lolly export, but this file’s bytes no longer match it', 'warn');
+        else if (v.partsMadeWithLolly) push('~ Parts made with Lolly — the intact provenance chain records Lolly steps, but the file as it stands was produced by another tool', 'warn');
+        else if (v.state === 'expired') push('! Credential expired — the file still matches what was signed; the one-year on-device certificate has lapsed', 'warn');
+        else if (v.state === 'invalid') push('✕ Credential broken — the file no longer matches what was signed', 'bad');
+        else if (v.state === 'none') push('○ No Content Credentials found', 'dim');
+        else push('✓ Credential intact — signed on-device (integrity, not identity)', 'good');
+        if (report.reason && report.state !== 'invalid') push(`  ${vclean(report.reason)}`, 'dim');
+        if (report.claim) {
+          const c = report.claim;
+          const s: Partial<NonNullable<typeof report.signer>> = report.signer ?? {};
+          const env = (report.environment ?? {}) as Record<string, string | number | boolean>;
+          const id = report.signer?.identity;
+          push(report.trusted
+            ? '  (fields below are the CA-verified signer’s own claim)'
+            : '  (fields below are self-asserted by whoever signed the file)', 'dim');
+          const generator = c.generatorInfo?.name
+            ? `${c.generatorInfo.name}${c.generatorInfo.version ? ' ' + c.generatorInfo.version : ''}`
+            : c.claimGenerator;
+          const facts: Array<[string, unknown]> = [
+            ['Title', c.title],
+            ['Identity', report.trusted && id && `${id.email || s.commonName}${id.issuer ? ` — verified by ${id.issuer}` : ''}`],
+            ['Tool', env.tool],
+            ['Produced by', report.author && `${report.author.name}${report.author.email ? ` <${report.author.email}>` : ''}`],
+            [report.delivered ? 'Delivered by' : 'Made with', generator],
+            ['Signed', c.actions?.find(a => a.when)?.when],
+            ['Where', [env.surface, env.engine, env.os].filter(Boolean).join(' · ')],
+            ['Signer', s.commonName],
+            ['Issuer', s.organization && `${s.organization}${s.selfSigned ? ' (self-signed)' : ''}`],
+            ['Algorithm', s.alg],
+            ['Manifest', c.manifestLabel],
+          ];
+          for (const [k, val] of facts) if (val) push(`  ${k.padEnd(11)} ${vclean(val)}`, 'fg');
+        }
+        for (const chk of report.checks) {
+          const tone = chk.ok ? 'good' : chk.code === 'signingCredential.untrusted' ? 'dim' : 'bad';
+          const mark = chk.ok ? '✓' : chk.code === 'signingCredential.untrusted' ? 'ℹ' : '✕';
+          push(`  ${mark} ${vclean(chk.code)} — ${vclean(chk.explanation)}`, tone);
+        }
+        setVscroll(0);
+        setVreport({ path: abs, lines });
+        setStatus('');
+        // Deep pixel scan (progressive enhancement — needs the Tier-B browser + built
+        // dist): the /valid view's own neural decode for Lolly's ?durable=1 mark and
+        // foreign TrustMark / Content Seal watermarks. Metadata can be stripped; the
+        // durable mark is what still identifies a Lolly export afterwards.
+        let appended = false;
+        // Replace this report's LAST line, only while it's still the open report. The
+        // RESULT lands at the tail, usually below the fold — follow it then (and only
+        // then: yanking the view for the interim "running…" line would hide the headline
+        // the user is reading during the ~minute the scan takes).
+        const swapTail = (line: VLine): void => {
+          setVreport(r => r && r.path === abs ? { ...r, lines: [...r.lines.slice(0, appended ? -1 : undefined), line] } : r);
+          setVscroll(Math.max(0, (lines.length + 1) - vInnerH));
+        };
+        try {
+          const { browserInstalled } = await import('@lolly-tools/node-shell/browsers');
+          if (!browserInstalled() || !/\.(png|jpe?g|webp|gif|tiff?)$/i.test(abs)) return;
+          setVreport(r => r && r.path === abs ? { ...r, lines: [...r.lines, { text: '🔍 Deep pixel scan running…', tone: 'dim' }] } : r);
+          appended = true;
+          const { deepScanViaWebShell } = await import('@lolly-tools/node-shell/webshell-render');
+          const d = (await deepScanViaWebShell([abs]))[0];
+          swapTail(!d?.scanned ? { text: '○ Deep scan: this file type can’t be pixel-scanned', tone: 'dim' }
+            : d.lollyDurable ? { text: '✦ Lolly durable mark decoded from the pixels — survives metadata stripping and re-encoding', tone: 'good' }
+            : d.trustmark ? { text: '~ Adobe TrustMark watermark decoded — embedded by another TrustMark-aware tool', tone: 'warn' }
+            : d.contentSeal ? { text: '~ Meta Content Seal watermark decoded', tone: 'warn' }
+            : { text: '○ Deep scan: no pixel watermark decoded (not proof of absence)', tone: 'dim' });
+        } catch (e) {
+          swapTail({ text: `! Deep scan unavailable — ${vclean((e as Error).message)}`, tone: 'warn' });
+        }
       } catch (e) { setStatus('Verify failed: ' + (e as Error).message); }
     })();
   }
@@ -140,6 +237,25 @@ export function Profile({ bridge, onNav, onQuit }: { bridge: TuiBridge; onNav: (
           active finished={prog.finished} note={prog.note}
         />
         <Footer shortcuts={prog.finished ? [{ key: '⏎', label: 'close' }] : [{ key: '…', label: 'rendering every project — keep the terminal open' }]} />
+      </Box>
+    );
+  }
+
+  // The verify report takes over the screen (same idiom as the render-everything panel):
+  // headline + facts + checks + deep-scan line, windowed with j/k when it outgrows the panel.
+  if (vreport) {
+    const win = vreport.lines.slice(vscroll, vscroll + vInnerH);
+    const more = vreport.lines.length > vInnerH;
+    return (
+      <Box flexDirection="column" width={cols} height={rows}>
+        <Tabs active="profile" />
+        <Panel
+          title={`Content Credentials — ${basename(vreport.path)}${more ? ` (${vscroll + 1}–${Math.min(vscroll + vInnerH, vreport.lines.length)}/${vreport.lines.length})` : ''}`}
+          width={cols} height={Math.max(6, rows - 3)} active
+        >
+          {win.map((l, i) => <Text key={vscroll + i} color={V_TONE_COLOR[l.tone]} wrap="truncate-end">{l.text}</Text>)}
+        </Panel>
+        <Footer shortcuts={[...(more ? [{ key: 'j/k', label: 'scroll' }] : []), { key: 'esc/⏎', label: 'close' }]} />
       </Box>
     );
   }
