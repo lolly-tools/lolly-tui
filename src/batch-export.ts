@@ -25,7 +25,7 @@ import type { JSDOM } from 'jsdom';
 import { mountTool, exportToFile, exportableFormats } from './engine-render.ts';
 import { listSessions, defaultExportDir, slug, type SavedSession } from './store.ts';
 import { childFolders, type Folder } from './folders.ts';
-import type { HostV1 } from '../../../engine/src/bridge/host-v1.ts';
+import type { HostV1 } from '@lolly-tools/core/host-v1';
 
 /** A rendered (or skipped) member, surfaced for the tick log + result summary. */
 export interface BatchMember {

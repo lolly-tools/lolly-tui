@@ -13,7 +13,7 @@ import { parsePdfBytes } from './import/pdf.ts';
 import { mountTool, currentQuery, type Manifest } from './engine-render.ts';
 import { saveSession } from './store.ts';
 import type { DesignMapOptions } from '@lolly/engine';
-import type { HostV1 } from '../../../engine/src/bridge/host-v1.ts';
+import type { HostV1 } from '@lolly-tools/core/host-v1';
 
 const expandHome = (p: string): string => (p.startsWith('~') && (p.length === 1 || p[1] === '/') ? homedir() + p.slice(1) : p);
 

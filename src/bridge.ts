@@ -12,7 +12,7 @@
 import { JSDOM } from 'jsdom';
 import { createCliBridge } from '../../cli/src/bridge.ts';
 import { getProfile } from './store.ts';
-import type { HostV1, Profile } from '../../../engine/src/bridge/host-v1.ts';
+import type { HostV1, Profile } from '@lolly-tools/core/host-v1';
 
 export interface TuiBridge {
   host: HostV1;

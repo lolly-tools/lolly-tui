@@ -16,10 +16,10 @@ import { assertRenderOk } from '@lolly-tools/node-shell/render-integrity';
 import type { RenderDims } from '@lolly-tools/node-shell/webshell-render';
 import { toolFetchFile } from './catalog.ts';
 import { getProfile } from './store.ts';
-// The same allowlisted-fetch module every shell builds host.net from (the CLI
-// bridge imports it the same way) — one matcher, no drift.
-import { createNetAPI } from '../../web/src/bridge/net.ts';
-import type { HostV1, Profile } from '../../../engine/src/bridge/host-v1.ts';
+// The same allowlisted-fetch module every shell builds host.net from (the web
+// bridge re-exports this one) — one matcher, no drift.
+import { createNetAPI } from '@lolly-tools/node-shell/net';
+import type { HostV1, Profile } from '@lolly-tools/core/host-v1';
 import type { JSDOM } from 'jsdom';
 
 export type Runtime = Awaited<ReturnType<typeof createRuntime>>;
