@@ -10,8 +10,9 @@ import TextInput from 'ink-text-input';
 import { readFile } from 'node:fs/promises';
 import { basename, dirname } from 'node:path';
 import { homedir } from 'node:os';
-import { verifyC2pa, resolveVerdict, defaultTrustAnchors } from '@lolly/engine';
+import { verifyC2pa, resolveVerdict } from '@lolly/engine';
 import { getProfile, setProfile, backupData, listSessions } from '../store.ts';
+import { loadTrustAnchors, describeAnchors } from '../trust-anchors.ts';
 import { exportSessions } from '../batch-export.ts';
 import { loadFavourites, loadHidden } from '../lib/asset-favourites.ts';
 import { loadToolFavourites } from '../lib/tool-favourites.ts';
@@ -45,6 +46,9 @@ const FIELDS: Field[] = [
   { key: 'phone', label: 'Phone', type: 'text' },
   { key: 'company', label: 'Company', type: 'text' },
   { key: 'useDetails', label: 'Embed my details in exports', type: 'bool' },
+  // Pinned CA roots for `v` (verify) — the terminal's stand-in for the CLI's repeatable
+  // --trust-anchor flag, since the TUI has no argv. PATH-style list of PEM paths.
+  { key: 'trustAnchors', label: 'Trust anchors (PEM paths, : separated)', type: 'text' },
 ];
 
 export function Profile({ bridge, onNav, onQuit }: { bridge: TuiBridge; onNav: (t: NavTarget) => void; onQuit: () => void }) {
@@ -131,8 +135,11 @@ export function Profile({ bridge, onNav, onQuit }: { bridge: TuiBridge; onNav: (
   // Verify a file's Content Credentials — the same engine verifier + shared verdict
   // ladder (resolveVerdict) the web /valid view and `lolly validate` render, shown as a
   // full report panel: headline, claim facts, per-check list, then the deep pixel scan.
-  // Trust policy matches the CLI validator (no Lolly-root pinning — the documented
-  // terminal-surface split; see engine/src/c2pa-verdict.ts).
+  // Trust policy matches the CLI validator: the vendored C2PA list plus every root the
+  // user pinned (LOLLY_TRUST_ANCHOR / the profile's Trust anchors field — the terminal's
+  // stand-in for --trust-anchor, see trust-anchors.ts), and no Lolly-root pinning (the
+  // documented terminal-surface split; see engine/src/c2pa-verdict.ts). The anchor set is
+  // printed in the report, so an untrusted verdict is never unexplained.
   function doVerify(path: string): void {
     setVerifying(false);
     const p = path.trim(); if (!p) return;
@@ -141,7 +148,8 @@ export function Profile({ bridge, onNav, onQuit }: { bridge: TuiBridge; onNav: (
       try {
         const abs = p.startsWith('~') && (p.length === 1 || p[1] === '/') ? homedir() + p.slice(1) : p;
         const bytes = new Uint8Array(await readFile(abs));
-        const report = await verifyC2pa(bytes, { trustAnchors: defaultTrustAnchors({ includeLollyRoot: false }) });
+        const trust = await loadTrustAnchors(process.env.LOLLY_TRUST_ANCHOR, profile);
+        const report = await verifyC2pa(bytes, { trustAnchors: trust.anchors });
         const v = resolveVerdict(report);
         const lines: VLine[] = [];
         const push = (text: string, tone: VLine['tone'] = 'fg'): void => { lines.push({ text, tone }); };
@@ -187,6 +195,9 @@ export function Profile({ bridge, onNav, onQuit }: { bridge: TuiBridge; onNav: (
           const mark = chk.ok ? '✓' : chk.code === 'signingCredential.untrusted' ? 'ℹ' : '✕';
           push(`  ${mark} ${vclean(chk.code)} — ${vclean(chk.explanation)}`, tone);
         }
+        // Which anchor set produced that trust line. Without this a user cannot tell an
+        // untrusted-by-design verdict from a mis-pinned root.
+        for (const l of describeAnchors(trust)) push(l.text, l.warn ? 'warn' : 'dim');
         setVscroll(0);
         setVreport({ path: abs, lines });
         setStatus('');

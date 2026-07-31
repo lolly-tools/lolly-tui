@@ -17,6 +17,12 @@
  * runtime.setInput per row/field edit (see setField/addRow). This also makes an
  * editor-layout tool's box TEXT editable (its `boxes` blocks input carries `text`).
  * All rendered inside the SAME fixed-size Inputs panel, so nothing shakes.
+ *
+ * A `table` input (engine 1.78 — battlecards, any spreadsheet-shaped tool) is enterable
+ * the same way, but as a real GRID rather than a field list: Enter drills into the cells
+ * (h/j/k/l or arrows move, row -1 is the heading row), Enter/e edits a cell, a/A add a
+ * row/column, d/D delete one, i imports a CSV/TSV/Markdown file (the engine's
+ * parseTableText, the same importer `--<id>-data=table.csv` uses in the CLI).
  */
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -26,7 +32,7 @@ import { MultilineInput } from '../components/MultilineInput.tsx';
 import { join, basename, extname } from 'node:path';
 import { readFile, writeFile, mkdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { isToolUrl, parseDataRows } from '@lolly/engine';
+import { isToolUrl, parseDataRows, parseTableText } from '@lolly/engine';
 import { loadAssets } from '../catalog.ts';
 import type { AssetRow } from '../catalog.ts';
 import { filterAssets, assetEmoji, assetDetail } from '../lib/asset-list.ts';
@@ -52,7 +58,8 @@ import { fmtEmoji } from '../emoji.ts';
 import type { TuiBridge } from '../bridge.ts';
 import { deriveBlockKeys, blockParentIndex, blockTreeOrder, nestingActive, nestingConfig } from '../lib/block-tree.ts';
 import type { BlockRow, TreeEntry } from '../lib/block-tree.ts';
-import type { BlockFieldSpec, BlocksNesting, InputValue } from '../../../../engine/src/inputs.ts';
+import * as tbl from '../lib/table-edit.ts';
+import type { BlockFieldSpec, BlocksNesting, InputValue, TableValue } from '../../../../engine/src/inputs.ts';
 
 interface ModelItem {
   id: string;
@@ -80,6 +87,8 @@ type Mode = 'browse' | 'editing' | 'editml' | 'naming' | 'addkind' | 'picking' |
 type Focus = 'inputs' | 'export' | 'preview';
 /** Block sub-editor position: `field < 0` ⇒ ROW list; `field >= 0` ⇒ one row's FIELDS. */
 type BlockNav = { row: number; field: number };
+/** Table grid cursor: `row === -1` ⇒ the heading row, `row >= 0` ⇒ a body row. */
+type TableNav = { row: number; col: number };
 const TEXTUAL = new Set(['text', 'longtext', 'url', 'number', 'color', 'date', 'time', 'datetime-local']);
 const FIELD_TEXTUAL = new Set(['text', 'longtext', 'url', 'number', 'color']);
 // Path-style inputs edited by typing a filesystem path (file) or an asset id / lolly.tools
@@ -175,6 +184,8 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
   const [importId, setImportId] = useState('');   // blocks input awaiting a CSV/JSON import path
   // Block sub-editor state. `blk === null` → normal input list.
   const [blk, setBlk] = useState<BlockNav | null>(null);
+  // Table grid editor state. `grid === null` → normal input list.
+  const [grid, setGrid] = useState<TableNav | null>(null);
   const [chooser, setChooser] = useState<{ kinds: AddKind[]; sel: number } | null>(null);
   // Catalog asset picker (opened with ⏎ on an `asset` input). `assets` is lazy-loaded
   // the first time the picker opens; `pick` is the transient picker state; `pickTarget`
@@ -663,6 +674,14 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
     setMode('browse');
     // Editing a live interactive control — write straight back into the tool's DOM.
     if (icEdit && ic) { ic.setValue(icEdit, raw); setIcEdit(null); bumpIc(); return; }
+    // A table cell edit writes back the WHOLE grid (setCell keeps it rectangular).
+    if (grid && model[sel]?.type === 'table') {
+      const item = model[sel]!;
+      const t = tbl.asTable(item.value);
+      const cur = tbl.clampCursor(t, grid.row, grid.col);
+      setTable(item, tbl.setCell(t, cur.row, cur.col, raw));
+      return;
+    }
     // Block field edit takes priority — coerce by the field's type and write it back.
     if (blk && blk.field >= 0 && model[sel]?.type === 'blocks') {
       const item = model[sel]!;
@@ -707,21 +726,40 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
     } catch (e) { setStatus('File error: ' + (e as Error).message); }
   }
   // Import a CSV/JSON file into the pending `blocks` input (importId), replacing its rows
-  // with the parsed data via the shared engine importer (parseDataRows).
+  // with the parsed data via the shared engine importer (parseDataRows). A `table` input
+  // takes the same key but the OTHER engine importer (parseTableText — first row =
+  // headings), so the terminal fills a grid from a spreadsheet exactly like the CLI's
+  // `--<id>-data=table.csv`.
   function importNow(path: string): void {
     setMode('browse');
     const item = model.find(m => m.id === importId);
     const p = path.trim();
-    if (!runtime || !item || item.type !== 'blocks' || !p) return;
+    if (!runtime || !item || !p) return;
     (async () => {
       try {
         const text = await readFile(expandHome(p), 'utf8');
+        if (item.type === 'table') {
+          const parsed = parseTableText(text);
+          if (!parsed) throw new Error(`${basename(expandHome(p))} does not parse as a CSV/TSV/Markdown table`);
+          await runtime.setInput(item.id, parsed as never);
+          refresh();
+          setGrid(g => (g ? { row: -1, col: 0 } : g));
+          setStatus(`✓ Imported ${parsed.rows.length} row${parsed.rows.length === 1 ? '' : 's'} × ${parsed.columns.length} column${parsed.columns.length === 1 ? '' : 's'} → ${item.id}`);
+          return;
+        }
+        if (item.type !== 'blocks') return;
         const { rows, truncated } = parseDataRows(text, { fields: (item.fields ?? []) as Array<{ id: string; label?: string; type?: string }> });
         await runtime.setInput(item.id, rows as never);
         refresh();
         setStatus(`✓ Imported ${rows.length} row${rows.length === 1 ? '' : 's'} → ${item.id}${truncated ? ' (row cap reached)' : ''}`);
       } catch (e) { setStatus('Import failed: ' + (e as Error).message); }
     })();
+  }
+  /** Write a whole table value back through the runtime (the engine rejects ragged grids,
+   *  so every mutation goes through the lib helpers that keep it rectangular). */
+  function setTable(item: ModelItem, next: TableValue): void {
+    if (!runtime) return;
+    runtime.setInput(item.id, next as never).then(refresh).catch(() => {});
   }
   // Resolve a raw asset id / lolly.tools URL to the AssetRef the template consumes.
   // setInput/setField do NOT re-resolve refs (only createRuntime does), so we resolve
@@ -974,6 +1012,33 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
       return;
     }
 
+    // Table grid editor. A terminal IS a grid, so this stays one level (no row→field
+    // drill-in): the cursor moves over cells, row -1 being the heading row.
+    if (grid) {
+      const item = model[sel];
+      if (!item || item.type !== 'table' || !runtime) { setGrid(null); return; }
+      const t = tbl.asTable(item.value);
+      const cur = tbl.clampCursor(t, grid.row, grid.col);
+      if (key.escape) { setGrid(null); return; }
+      if (input === 'i' || input === 'I') { setImportId(item.id); setDraft(''); setMode('importing'); return; }
+      if (key.upArrow || input === 'k') { setGrid(tbl.clampCursor(t, cur.row - 1, cur.col)); return; }
+      if (key.downArrow || input === 'j') { setGrid(tbl.clampCursor(t, cur.row + 1, cur.col)); return; }
+      if (key.leftArrow || input === 'h') { setGrid(tbl.clampCursor(t, cur.row, cur.col - 1)); return; }
+      if (key.rightArrow || input === 'l') { setGrid(tbl.clampCursor(t, cur.row, cur.col + 1)); return; }
+      if (input === 'a') { setTable(item, tbl.addRow(t, cur.row)); setGrid({ row: Math.max(0, cur.row + 1), col: cur.col }); return; }
+      if (input === 'A') { setTable(item, tbl.addColumn(t, cur.col)); setGrid({ row: cur.row, col: cur.col + 1 }); return; }
+      if (input === 'd') { setTable(item, tbl.deleteRow(t, cur.row)); setGrid(tbl.clampCursor(tbl.deleteRow(t, cur.row), cur.row, cur.col)); return; }
+      if (input === 'D') { setTable(item, tbl.deleteColumn(t, cur.col)); setGrid(tbl.clampCursor(tbl.deleteColumn(t, cur.col), cur.row, cur.col)); return; }
+      if (key.return || input === 'e') {
+        if (!t.columns.length) { setTable(item, tbl.addColumn(t, -1)); setGrid({ row: -1, col: 0 }); return; }
+        setGrid(cur);
+        setDraft(tbl.cellAt(t, cur.row, cur.col));
+        setMode('editing');
+        return;
+      }
+      return;
+    }
+
     if (key.escape || input === 'q') return onBack();
     if (key.tab) {
       // Cycle only the panels that exist: Inputs (if the tool has any) · Export · Preview
@@ -1033,7 +1098,8 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
     const item = model[sel]; if (!item || !runtime) return;
     // `i` imports a CSV/JSON file into a blocks input (chart/table data) — the same engine
     // importer the web offers, so you fill rows from a spreadsheet instead of typing them.
-    if (item.type === 'blocks' && (input === 'i' || input === 'I')) { setImportId(item.id); setDraft(''); setMode('importing'); return; }
+    if ((item.type === 'blocks' || item.type === 'table') && (input === 'i' || input === 'I')) { setImportId(item.id); setDraft(''); setMode('importing'); return; }
+    if (item.type === 'table' && (key.return || input === 'e')) { setGrid({ row: -1, col: 0 }); return; }
     if (item.type === 'blocks' && (key.return || input === 'e')) {
       const order = treeEntries(item).map(e => e.idx);
       setBlk({ row: order[0] ?? 0, field: -1 });
@@ -1160,6 +1226,54 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
         })}</>;
   }
 
+  // Table GRID body: heading row, then body rows, cursor cell in reverse video. Column
+  // widths are computed from the content and shrunk to the panel (columnWidths), so the
+  // grid never wraps and the panel never shakes.
+  const gridItem = grid && model[sel]?.type === 'table' ? model[sel]! : null;
+  let gridBody: ReactNode = null;
+  if (gridItem && grid) {
+    const t = tbl.asTable(gridItem.value);
+    const cur = tbl.clampCursor(t, grid.row, grid.col);
+    if (!t.columns.length) {
+      gridBody = <Text color={theme.dim} wrap="wrap">Empty table — press A to add a column, or i to import a CSV/TSV/Markdown file.</Text>;
+    } else {
+      const widths = tbl.columnWidths(t, Math.max(10, inputsW - 4));
+      const visRows = Math.max(1, inputsH - 5);   // borders + title + heading row + prompt
+      // Window the BODY rows around the cursor; the heading row is always pinned on top.
+      const bodySel = Math.max(0, cur.row);
+      let start = 0;
+      if (t.rows.length > visRows) start = Math.min(Math.max(0, bodySel - Math.floor(visRows / 2)), t.rows.length - visRows);
+      const line = (cells: string[], rowIdx: number, dim: boolean): ReactNode => (
+        <Text key={rowIdx} wrap="truncate-end">
+          {widths.map((w, ci) => (
+            <Text key={ci}
+              inverse={rowIdx === cur.row && ci === cur.col}
+              bold={rowIdx === -1}
+              color={rowIdx === cur.row && ci === cur.col ? theme.accentName : dim ? theme.dim : undefined}
+            >{tbl.fitCell(cells[ci] ?? '', w) + (ci === widths.length - 1 ? '' : ' ')}</Text>
+          ))}
+        </Text>
+      );
+      gridBody = (
+        <>
+          {line(t.columns, -1, false)}
+          {t.rows.length === 0
+            ? <Text color={theme.dim} wrap="truncate-end">(no rows — press a to add one)</Text>
+            : t.rows.slice(start, start + visRows).map((r, i) => line(r, start + i, true))}
+        </>
+      );
+    }
+  }
+  // Cell editor: an inline field UNDER the grid, so the cell being typed stays visible.
+  if (gridItem && grid && mode === 'editing') {
+    const t = tbl.asTable(gridItem.value);
+    const cur = tbl.clampCursor(t, grid.row, grid.col);
+    const where = cur.row < 0 ? `heading ${cur.col + 1}` : `${t.columns[cur.col] || `col ${cur.col + 1}`} · row ${cur.row + 1}`;
+    gridBody = (<>{gridBody}
+      <Box><Text color={theme.accentName}>{where} › </Text><TextInput value={draft} onChange={setDraft} onSubmit={commit} /></Box>
+    </>);
+  }
+
   // Add-kind chooser body.
   const chooserBody = mode === 'addkind' && chooser ? (
     <>
@@ -1198,10 +1312,16 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
   else if (blockItem && blk) inputsTitle = blk.field < 0
     ? `${blockItem.label ?? blockItem.id} · rows`
     : `${rowLabel(blockItem, blk.row)} · fields`;
+  else if (gridItem && grid) {
+    const t = tbl.asTable(gridItem.value);
+    const cur = tbl.clampCursor(t, grid.row, grid.col);
+    inputsTitle = `${gridItem.label ?? gridItem.id} · ${t.columns.length}×${t.rows.length} · ${cur.row < 0 ? 'headings' : `row ${cur.row + 1}`}`;
+  }
 
   const inputsBody = mode === 'picking' ? pickerBody
     : mode === 'addkind' ? chooserBody
     : blockItem && blk ? (blk.field < 0 ? rowBody : fieldBody)
+    : gridItem && grid ? gridBody
     : normalBody;
 
   const inputsPanel = (
@@ -1216,9 +1336,9 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
       <Text color={theme.dim} wrap="truncate-end">{`${fmtEmoji(fmt)} ${fmt.toUpperCase()} · ${width || 'native'}×${height || 'native'} ${unit} → ${outPath}   ·   tab to change · x to export`}</Text>
     </Panel>
   ) : (
-    <Panel title={linkKnobs.length ? 'Export settings · from link' : 'Export settings'} width={stacked || docFull ? cols : rightW} height={docFull ? docExportH : exportH} active={focus === 'export' && !blk}>
+    <Panel title={linkKnobs.length ? 'Export settings · from link' : 'Export settings'} width={stacked || docFull ? cols : rightW} height={docFull ? docExportH : exportH} active={focus === 'export' && !blk && !grid}>
       {EXPORT_FIELDS.map((f, i) => {
-        const active = focus === 'export' && !blk && i === exportSel;
+        const active = focus === 'export' && !blk && !grid && i === exportSel;
         const editingThis = active && mode === 'editing' && f.kind === 'text';
         return (
           <Box key={f.key}>
@@ -1325,7 +1445,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
       {mode === 'naming'
         ? <Text><Text color={theme.accentName}>Save project as: </Text><TextInput value={draft} onChange={setDraft} onSubmit={saveNow} /></Text>
         : mode === 'importing'
-        ? <Text><Text color={theme.accentName}>Import data (CSV/JSON) file: </Text><TextInput value={draft} onChange={setDraft} onSubmit={importNow} /></Text>
+        ? <Text><Text color={theme.accentName}>{model.find(m => m.id === importId)?.type === 'table' ? 'Import table (CSV/TSV/Markdown) file: ' : 'Import data (CSV/JSON) file: '}</Text><TextInput value={draft} onChange={setDraft} onSubmit={importNow} /></Text>
         : <Text color={status.startsWith('✓') ? theme.accentName : theme.dim} wrap="truncate-end">{status || ' '}</Text>}
     </Box>
   );
@@ -1336,6 +1456,9 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
     ? [{ key: 'j/k', label: 'move' }, { key: '/', label: 'search' }, { key: '⏎', label: 'choose' }, { key: 'esc', label: 'cancel' }]
     : mode === 'addkind'
     ? [{ key: 'j/k', label: 'move' }, { key: '⏎', label: 'add' }, { key: 'esc', label: 'cancel' }]
+    : gridItem && grid
+      ? [{ key: 'hjkl', label: 'cell' }, { key: '⏎/e', label: 'edit' }, { key: 'a/A', label: 'add row/col' },
+         { key: 'd/D', label: 'del row/col' }, { key: 'i', label: 'import' }, { key: 'esc', label: 'back' }]
     : blockItem && blk && blk.field < 0
       ? [{ key: 'j/k', label: 'row' }, { key: '⏎', label: 'open' }, { key: 'a', label: 'add' }, { key: 'd', label: 'del' }, { key: '[ ]', label: 'move' },
          ...(nestingActive(blockItem, topValues()) ? [{ key: '< >', label: 'nest' }] : []), { key: 'esc', label: 'back' }]
@@ -1408,6 +1531,7 @@ function editHint(item: ModelItem): string {
   if (item.type === 'boolean') return item.value ? '[x] on' : '[ ] off';
   if (item.type === 'select') { const o = item.options?.find(x => x.value === item.value); return `‹ ${o?.label ?? String(item.value ?? '')} ›`; }
   if (item.type === 'blocks') { const n = Array.isArray(item.value) ? item.value.length : 0; return `${n} ${n === 1 ? 'row' : 'rows'} — ⏎ to edit`; }
+  if (item.type === 'table') return tbl.tableSummary(item.value);
   const s = stringifyValue(item);
   if (item.type === 'number' && item.min !== undefined && item.max !== undefined) {
     const cur = typeof item.value === 'number' ? item.value : (parseFloat(s) || 0);
