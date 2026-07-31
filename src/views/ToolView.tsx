@@ -1027,8 +1027,8 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
       if (key.rightArrow || input === 'l') { setGrid(tbl.clampCursor(t, cur.row, cur.col + 1)); return; }
       if (input === 'a') { setTable(item, tbl.addRow(t, cur.row)); setGrid({ row: Math.max(0, cur.row + 1), col: cur.col }); return; }
       if (input === 'A') { setTable(item, tbl.addColumn(t, cur.col)); setGrid({ row: cur.row, col: cur.col + 1 }); return; }
-      if (input === 'd') { setTable(item, tbl.deleteRow(t, cur.row)); setGrid(tbl.clampCursor(tbl.deleteRow(t, cur.row), cur.row, cur.col)); return; }
-      if (input === 'D') { setTable(item, tbl.deleteColumn(t, cur.col)); setGrid(tbl.clampCursor(tbl.deleteColumn(t, cur.col), cur.row, cur.col)); return; }
+      if (input === 'd') { const next = tbl.deleteRow(t, cur.row); setTable(item, next); setGrid(tbl.clampCursor(next, cur.row, cur.col)); return; }
+      if (input === 'D') { const next = tbl.deleteColumn(t, cur.col); setTable(item, next); setGrid(tbl.clampCursor(next, cur.row, cur.col)); return; }
       if (key.return || input === 'e') {
         if (!t.columns.length) { setTable(item, tbl.addColumn(t, -1)); setGrid({ row: -1, col: 0 }); return; }
         setGrid(cur);
