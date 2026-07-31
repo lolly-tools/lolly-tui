@@ -25,9 +25,9 @@
  * comes from `describeAnchors`, which is a pure function of the resolved sources.
  */
 import { readFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { basename, delimiter } from 'node:path';
+import { basename } from 'node:path';
 import { defaultTrustAnchors } from '@lolly/engine';
+import { expandHome, splitAnchorList } from '@lolly-tools/node-shell/trust-anchors';
 
 /** One pinned PEM path plus where it was configured (shown in the verdict panel). */
 export interface AnchorSource {
@@ -49,17 +49,13 @@ export interface ResolvedAnchors {
   lollyRoot: boolean;
 }
 
-/** Expand a leading `~` to the home directory (the TUI accepts `~/…` everywhere). */
-function expandHome(p: string): string {
-  return p.startsWith('~') && (p.length === 1 || p[1] === '/') ? homedir() + p.slice(1) : p;
-}
-
-/** Split a PATH-style list of PEM paths; blanks dropped, `~` left for the loader. */
-function splitList(v: unknown): string[] {
-  if (Array.isArray(v)) return v.flatMap(splitList);
-  if (typeof v !== 'string') return [];
-  return v.split(delimiter).map(s => s.trim()).filter(Boolean);
-}
+/**
+ * The PATH-splitting and `~`-expansion rules come from the SHARED module, not from a
+ * private copy here. Two identical copies is how the CLI and the TUI last disagreed
+ * about `path.delimiter` on Windows, and the shared module's header plus the CLI's
+ * comment both already claimed the fork was collapsed while this file still forked it.
+ */
+const splitList = splitAnchorList;
 
 /**
  * The pinned-anchor paths for this session, env first then profile, de-duplicated by the
