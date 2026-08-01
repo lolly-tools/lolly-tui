@@ -30,6 +30,10 @@ await writeFile(second, PEM);
 await writeFile(empty, '-----BEGIN CERTIFICATE-----\n-----END CERTIFICATE-----\n');
 
 const VENDORED = defaultTrustAnchors({ includeLollyRoot: false }).length;
+// The built-in set this shell actually verifies against: the vendored C2PA
+// known-certificate list PLUS the Lolly CA root, pinned on every surface as of
+// plans/cli-ga-contract.md §12 O1 (Andy, 2026-08-01).
+const BUILTIN = VENDORED + 1;
 
 test('anchorPaths reads the env var as a PATH-style list', () => {
   assert.deepEqual(anchorPaths(['/a.pem', '/b.pem'].join(delimiter), null), [
@@ -60,22 +64,24 @@ test('anchorPaths ignores blanks, whitespace and a non-string profile value', ()
   assert.deepEqual(anchorPaths(`${delimiter} /a.pem ${delimiter}`, null), [{ path: '/a.pem', from: 'env' }]);
 });
 
-test('with nothing pinned the anchor set is exactly the vendored C2PA list', async () => {
+test('with nothing pinned the anchor set is the vendored C2PA list plus the Lolly root', async () => {
   const r = await loadTrustAnchors(undefined, {});
-  assert.equal(r.anchors.length, VENDORED);
+  assert.equal(r.anchors.length, BUILTIN);
   assert.deepEqual(r.loaded, []);
   assert.deepEqual(r.failed, []);
 });
 
-test('the Lolly CA root is never pinned here, matching the CLI validator', async () => {
+test('the Lolly CA root IS pinned here, matching the CLI validator (contract §12 O1)', async () => {
+  // It used to be excluded on both terminal surfaces, so a Lolly-CA-signed export read
+  // "Verified" in the browser and plain "Credential intact" here. One word, one meaning.
   const r = await loadTrustAnchors(undefined, {});
-  assert.equal(r.lollyRoot, false);
-  assert.equal(r.anchors.length, defaultTrustAnchors({ includeLollyRoot: false }).length);
+  assert.equal(r.lollyRoot, true);
+  assert.deepEqual(r.anchors, defaultTrustAnchors({ includeLollyRoot: true }));
 });
 
-test('a pinned PEM is added on top of the vendored list', async () => {
+test('a pinned PEM is added on top of the built-in set', async () => {
   const r = await loadTrustAnchors(good, {});
-  assert.equal(r.anchors.length, VENDORED + 1);
+  assert.equal(r.anchors.length, BUILTIN + 1);
   assert.deepEqual(r.loaded, [{ path: good, from: 'env' }]);
   assert.equal(r.vendored, VENDORED);
 });
@@ -83,7 +89,7 @@ test('a pinned PEM is added on top of the vendored list', async () => {
 test('env and profile anchors are both pinned, in that order', async () => {
   const r = await loadTrustAnchors(good, { trustAnchors: second });
   assert.deepEqual(r.loaded.map(s => s.from), ['env', 'profile']);
-  assert.equal(r.anchors.length, VENDORED + 2);
+  assert.equal(r.anchors.length, BUILTIN + 2);
 });
 
 test('a missing PEM is reported, not silently dropped', async () => {
@@ -98,7 +104,7 @@ test('one unparseable PEM does not cost the user their other anchors', async () 
   const r = await loadTrustAnchors([empty, good].join(delimiter), {});
   assert.deepEqual(r.loaded.map(s => s.path), [good]);
   assert.deepEqual(r.failed.map(s => s.path), [empty]);
-  assert.equal(r.anchors.length, VENDORED + 1);
+  assert.equal(r.anchors.length, BUILTIN + 1);
 });
 
 test('describeAnchors names the set, the pinned roots and the Lolly-root policy', async () => {
@@ -106,7 +112,8 @@ test('describeAnchors names the set, the pinned roots and the Lolly-root policy'
   const lines = describeAnchors(r).map(l => l.text);
   assert.ok(lines[0]!.includes(`C2PA known-certificate list (${VENDORED})`), String(lines[0]));
   assert.ok(lines[0]!.includes('corp-root.pem (LOLLY_TRUST_ANCHOR)'), String(lines[0]));
-  assert.ok(lines[0]!.includes('Lolly CA root NOT pinned'), String(lines[0]));
+  assert.ok(lines[0]!.includes('· Lolly CA root'), String(lines[0]));
+  assert.ok(!lines[0]!.includes('NOT pinned'), String(lines[0]));
   assert.ok(describeAnchors(r).every(l => !l.warn));
 });
 
