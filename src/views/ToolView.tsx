@@ -32,7 +32,8 @@ import { MultilineInput } from '../components/MultilineInput.tsx';
 import { join, basename, extname } from 'node:path';
 import { readFile, writeFile, mkdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { isToolUrl, parseDataRows, parseTableText } from '@lolly/engine';
+import { isToolUrl, parseDataRows, parseTableText, c2paDefaultOn } from '@lolly/engine';
+import type { ProvenanceManifest } from '@lolly/engine';
 import { loadAssets } from '../catalog.ts';
 import type { AssetRow } from '../catalog.ts';
 import { filterAssets, assetEmoji, assetDetail } from '../lib/asset-list.ts';
@@ -139,9 +140,15 @@ const EXPORT_FIELDS: Array<{ key: ExportKey; label: string; kind: 'cycle' | 'tex
 ];
 
 /** Map a parsed `?c2pa=` setting to a C2PA_DAYS index. On-with-no-lifetime (`?c2pa`) and
- *  an unrecognised bucket both fall to the 30-day default; off/absent → 0. */
-function c2paIndexFromSetting(c: { on: boolean; days: number | null } | null): number {
-  if (!c || !c.on) return 0;
+ *  an unrecognised bucket both fall to the 30-day default; an explicit off → 0.
+ *
+ *  ABSENT is not off: `null` is the "nobody said" case, and the answer to that is the
+ *  engine's one policy (c2paDefaultOn — render.c2pa:false and privacy:'on-device' opt a
+ *  tool out), the same call the web shell and the CLI make. Read from the manifest here
+ *  rather than re-derived, so the three surfaces cannot drift again. */
+function c2paIndexFromSetting(c: { on: boolean; days: number | null } | null, manifest?: ProvenanceManifest): number {
+  if (!c) return manifest && c2paDefaultOn(manifest) ? C2PA_DAYS.indexOf(30) : 0;
+  if (!c.on) return 0;
   const i = c.days != null ? C2PA_DAYS.indexOf(c.days) : -1;
   return i > 0 ? i : C2PA_DAYS.indexOf(30);
 }
@@ -360,7 +367,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
         setHeight(rv.height != null ? String(rv.height) : r.height ? String(r.height) : '');
         setUnitIdx(Math.max(0, UNITS.indexOf(rv.unit ?? r.unit ?? 'px')));
         setDpi(rv.dpi != null ? String(rv.dpi) : '300');
-        setC2paIdx(c2paIndexFromSetting(rv.c2pa));
+        setC2paIdx(c2paIndexFromSetting(rv.c2pa, m.manifest as unknown as ProvenanceManifest));
         setDurableOn(Boolean(rv.durable));
         setFilename(rv.filename ? rv.filename : slug(m.manifest.name ?? toolId));
         setPassword(rv.password ?? '');
