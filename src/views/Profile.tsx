@@ -13,6 +13,7 @@ import { homedir } from 'node:os';
 import { verifyC2pa, resolveVerdict } from '@lolly/engine';
 import { getProfile, setProfile, backupData, listSessions } from '../store.ts';
 import { loadTrustAnchors, describeAnchors } from '../trust-anchors.ts';
+import { cleanControlChars, verdictHeadline, verdictFacts, verdictChecks } from '@lolly-tools/node-shell/verdict-report';
 import { exportSessions } from '../batch-export.ts';
 import { loadFavourites, loadHidden } from '../lib/asset-favourites.ts';
 import { loadToolFavourites } from '../lib/tool-favourites.ts';
@@ -35,8 +36,9 @@ const V_TONE_COLOR = { good: theme.accentName, warn: theme.warn, bad: theme.dang
 
 // Every claim/signer string is attacker-controlled bytes from the file being checked —
 // strip control chars (incl. ESC) so a crafted manifest can't inject terminal sequences
-// or shred the Ink layout. Same rule as the CLI validator.
-const vclean = (v: unknown): string => String(v).replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ');
+// or shred the Ink layout. THE scrub is defined once in node-shell/verdict-report and
+// shared with the CLI validator and MCP; this is the local alias.
+const vclean = cleanControlChars;
 
 interface Field { key: string; label: string; type: 'text' | 'bool' }
 const FIELDS: Field[] = [
@@ -135,11 +137,12 @@ export function Profile({ bridge, onNav, onQuit }: { bridge: TuiBridge; onNav: (
   // Verify a file's Content Credentials — the same engine verifier + shared verdict
   // ladder (resolveVerdict) the web /valid view and `lolly validate` render, shown as a
   // full report panel: headline, claim facts, per-check list, then the deep pixel scan.
-  // Trust policy matches the CLI validator: the vendored C2PA list plus every root the
-  // user pinned (LOLLY_TRUST_ANCHOR / the profile's Trust anchors field — the terminal's
-  // stand-in for --trust-anchor, see trust-anchors.ts), and no Lolly-root pinning (the
-  // documented terminal-surface split; see engine/src/c2pa-verdict.ts). The anchor set is
-  // printed in the report, so an untrusted verdict is never unexplained.
+  // Trust policy matches the CLI validator: the Lolly CA root (includeLollyRoot: true,
+  // per plans/cli-ga-contract.md §12 O1 — a Lolly-CA-signed export now reads the same
+  // here as on the web /valid view) PLUS the vendored C2PA list PLUS every root the user
+  // pinned (LOLLY_TRUST_ANCHOR / the profile's Trust anchors field — the terminal's
+  // stand-in for --trust-anchor, see trust-anchors.ts). The anchor set is printed in the
+  // report, so an untrusted verdict is never unexplained.
   function doVerify(path: string): void {
     setVerifying(false);
     const p = path.trim(); if (!p) return;
@@ -153,47 +156,24 @@ export function Profile({ bridge, onNav, onQuit }: { bridge: TuiBridge; onNav: (
         const v = resolveVerdict(report);
         const lines: VLine[] = [];
         const push = (text: string, tone: VLine['tone'] = 'fg'): void => { lines.push({ text, tone }); };
-        // Headline — the CLI validator's rendering of the shared ladder, including its
-        // two documented quirks (parts elevated to a headline; no separate "Verified").
-        if (v.state === 'lolly') push('✦ Made with Lolly — credential intact, file unchanged since export', 'good');
-        else if (v.state === 'delivered') push('◆ Delivered by Lolly — verified authentic official asset; delivered by Lolly, not created by it', 'good');
-        else if (v.state === 'likelyLolly') push('~ Likely made with Lolly — the credential checks out and records a Lolly export, but this file’s bytes no longer match it', 'warn');
-        else if (v.partsMadeWithLolly) push('~ Parts made with Lolly — the intact provenance chain records Lolly steps, but the file as it stands was produced by another tool', 'warn');
-        else if (v.state === 'expired') push('! Credential expired — the file still matches what was signed; the one-year on-device certificate has lapsed', 'warn');
-        else if (v.state === 'invalid') push('✕ Credential broken — the file no longer matches what was signed', 'bad');
-        else if (v.state === 'none') push('○ No Content Credentials found', 'dim');
-        else push('✓ Credential intact — signed on-device (integrity, not identity)', 'good');
+        // Headline + facts + checks all come from the SHARED node-shell renderer
+        // (verdict-report.ts), so this panel and `lolly validate` can never again
+        // print different words for the same verdict — the drift that started this
+        // collapse. The two terminal quirks (parts elevated to a headline; no
+        // separate "Verified" line) live in the shared renderer via elevateParts.
+        const h = verdictHeadline(v, { elevateParts: true });
+        push(h.detail ? `${h.glyph} ${h.name} — ${h.detail}` : `${h.glyph} ${h.name}`, h.tone);
         if (report.reason && report.state !== 'invalid') push(`  ${vclean(report.reason)}`, 'dim');
         if (report.claim) {
-          const c = report.claim;
-          const s: Partial<NonNullable<typeof report.signer>> = report.signer ?? {};
-          const env = (report.environment ?? {}) as Record<string, string | number | boolean>;
-          const id = report.signer?.identity;
           push(report.trusted
             ? '  (fields below are the CA-verified signer’s own claim)'
             : '  (fields below are self-asserted by whoever signed the file)', 'dim');
-          const generator = c.generatorInfo?.name
-            ? `${c.generatorInfo.name}${c.generatorInfo.version ? ' ' + c.generatorInfo.version : ''}`
-            : c.claimGenerator;
-          const facts: Array<[string, unknown]> = [
-            ['Title', c.title],
-            ['Identity', report.trusted && id && `${id.email || s.commonName}${id.issuer ? ` — verified by ${id.issuer}` : ''}`],
-            ['Tool', env.tool],
-            ['Produced by', report.author && `${report.author.name}${report.author.email ? ` <${report.author.email}>` : ''}`],
-            [report.delivered ? 'Delivered by' : 'Made with', generator],
-            ['Signed', c.actions?.find(a => a.when)?.when],
-            ['Where', [env.surface, env.engine, env.os].filter(Boolean).join(' · ')],
-            ['Signer', s.commonName],
-            ['Issuer', s.organization && `${s.organization}${s.selfSigned ? ' (self-signed)' : ''}`],
-            ['Algorithm', s.alg],
-            ['Manifest', c.manifestLabel],
-          ];
-          for (const [k, val] of facts) if (val) push(`  ${k.padEnd(11)} ${vclean(val)}`, 'fg');
+          for (const [k, val] of verdictFacts(report)) push(`  ${k.padEnd(11)} ${val}`, 'fg');
         }
-        for (const chk of report.checks) {
-          const tone = chk.ok ? 'good' : chk.code === 'signingCredential.untrusted' ? 'dim' : 'bad';
-          const mark = chk.ok ? '✓' : chk.code === 'signingCredential.untrusted' ? 'ℹ' : '✕';
-          push(`  ${mark} ${vclean(chk.code)} — ${vclean(chk.explanation)}`, tone);
+        for (const chk of verdictChecks(report)) {
+          const tone = chk.mark === 'ok' ? 'good' : chk.mark === 'info' ? 'dim' : 'bad';
+          const mark = chk.mark === 'ok' ? '✓' : chk.mark === 'info' ? 'ℹ' : '✕';
+          push(`  ${mark} ${chk.code} — ${chk.explanation}`, tone);
         }
         // Which anchor set produced that trust line. Without this a user cannot tell an
         // untrusted-by-design verdict from a mis-pinned root.

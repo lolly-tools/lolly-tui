@@ -32,7 +32,7 @@ import { MultilineInput } from '../components/MultilineInput.tsx';
 import { join, basename, extname } from 'node:path';
 import { readFile, writeFile, mkdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { isToolUrl, parseDataRows, parseTableText, c2paDefaultOn } from '@lolly/engine';
+import { isToolUrl, parseDataRows, parseTableText, c2paDefaultOn, imprintDefaultOn, isImprintFormat, isImprintContainerFormat } from '@lolly/engine';
 import type { ProvenanceManifest } from '@lolly/engine';
 import { loadAssets } from '../catalog.ts';
 import type { AssetRow } from '../catalog.ts';
@@ -124,7 +124,7 @@ const C2PA_DAYS = [0, 7, 30, 90, 365];
 // web shell's isDurableFmt (views/tool-actions.ts). The embed itself runs in the web
 // shell's export path, so a durable export always routes via the Tier-B browser.
 const DURABLE_FMTS = ['png', 'jpg', 'jpeg', 'webp', 'avif', 'tiff'];
-type ExportKey = 'format' | 'width' | 'height' | 'unit' | 'dpi' | 'filename' | 'folder' | 'c2pa' | 'durable' | 'password';
+type ExportKey = 'format' | 'width' | 'height' | 'unit' | 'dpi' | 'filename' | 'folder' | 'c2pa' | 'imprint' | 'durable' | 'password';
 // Export-settings rows. `cycle` fields step with ←/→; `text` fields open an editor.
 const EXPORT_FIELDS: Array<{ key: ExportKey; label: string; kind: 'cycle' | 'text' }> = [
   { key: 'format', label: 'Format', kind: 'cycle' },
@@ -135,6 +135,7 @@ const EXPORT_FIELDS: Array<{ key: ExportKey; label: string; kind: 'cycle' | 'tex
   { key: 'filename', label: 'Filename', kind: 'text' },
   { key: 'folder', label: 'Folder', kind: 'text' },
   { key: 'c2pa', label: 'C2PA', kind: 'cycle' },
+  { key: 'imprint', label: 'Imprint', kind: 'cycle' },
   { key: 'durable', label: 'Durable', kind: 'cycle' },
   { key: 'password', label: 'Password', kind: 'text' },
 ];
@@ -208,6 +209,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
   const [unitIdx, setUnitIdx] = useState(0);
   const [dpi, setDpi] = useState('300');
   const [c2paIdx, setC2paIdx] = useState(0);
+  const [imprintOn, setImprintOn] = useState(true);    // Lolly Imprint (pixel watermark) — on by default, opt-out per export
   const [durableOn, setDurableOn] = useState(false);   // opt-in durable (TrustMark) credential — raster only, Tier-B
   const [filename, setFilename] = useState('');
   const [password, setPassword] = useState('');   // standard PDF open-password (from ?password= or typed)
@@ -215,7 +217,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
   // Print-prep params a link carried (bleed/marks/imprint/CMYK press). The TUI has no UI
   // rows for them, but they're threaded into the export dims so a colleague's print-ready
   // link still exports print-ready — matching the CLI (which reads them from the URL).
-  const [linkPrint, setLinkPrint] = useState<{ bleed?: string; marks?: string; imprint?: boolean; pressProfile?: string }>({});
+  const [linkPrint, setLinkPrint] = useState<{ bleed?: string; marks?: string; pressProfile?: string }>({});
   const [outDir, setOutDir] = useState(defaultExportDir());
   const [showImage, setShowImage] = useState(false);
   const [previewScroll, setPreviewScroll] = useState(0);   // line offset when the preview is focused
@@ -368,6 +370,11 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
         setUnitIdx(Math.max(0, UNITS.indexOf(rv.unit ?? r.unit ?? 'px')));
         setDpi(rv.dpi != null ? String(rv.dpi) : '300');
         setC2paIdx(c2paIndexFromSetting(rv.c2pa, m.manifest as unknown as ProvenanceManifest));
+        // Imprint is the same "absent means the policy" rule as C2PA: a link's explicit
+        // imprint=0/1 wins, otherwise the engine's default-on policy decides (off only
+        // for render.c2pa:false and on-device privacy tools). Read from the manifest so
+        // the terminal matches the web shell and CLI rather than defaulting on its own.
+        setImprintOn(rv.imprint ?? imprintDefaultOn(m.manifest as unknown as ProvenanceManifest));
         setDurableOn(Boolean(rv.durable));
         setFilename(rv.filename ? rv.filename : slug(m.manifest.name ?? toolId));
         setPassword(rv.password ?? '');
@@ -375,7 +382,9 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
         const marksCsv = rv.marks
           ? [rv.marks.crop && 'crop', rv.marks.registration && 'reg', rv.marks.bleed && 'bleed', rv.marks.colorBars && 'bars', rv.marks.provenance && 'prov'].filter(Boolean).join(',')
           : undefined;
-        setLinkPrint({ bleed: rv.bleed ?? undefined, marks: marksCsv || undefined, imprint: rv.imprint ?? undefined, pressProfile: rv.profile ?? undefined });
+        // imprint is NOT carried here anymore — it is an editable Imprint row (imprintOn),
+        // seeded from the same link param above. linkPrint holds only the knobs with no row.
+        setLinkPrint({ bleed: rv.bleed ?? undefined, marks: marksCsv || undefined, pressProfile: rv.profile ?? undefined });
         // Name which knobs the link set, for a visible "review this" cue (and to annotate
         // the Export panel title). A failed render (P1: onInit threw, e.g. a capability this
         // shell can't fulfil) takes priority — surface it loudly instead of a silent preview.
@@ -383,7 +392,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
           rv.format && 'format', (rv.width != null || rv.height != null) && 'size',
           rv.unit && 'unit', rv.dpi != null && 'dpi', rv.c2pa?.on && 'credential',
           rv.password && 'password', rv.filename && 'filename', rv.lang && `lang ${rv.lang}`,
-          rv.bleed && 'bleed', rv.marks && 'marks', rv.imprint && 'imprint', rv.durable && 'durable', rv.profile && 'press',
+          rv.bleed && 'bleed', rv.marks && 'marks', rv.durable && 'durable', rv.profile && 'press',
         ].filter(Boolean) as string[];
         setLinkKnobs(knobs);
         const hookErr = m.runtime.hookErrors[0];
@@ -669,6 +678,12 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
       case 'filename': return outName;
       case 'folder': return outDir;
       case 'c2pa': { const d = C2PA_DAYS[c2paIdx] ?? 0; return d === 0 ? 'off' : `on · ${d}-day cert`; }
+      case 'imprint': return isImprintFormat(fmt)
+        // A container (pdf/pdf-cmyk/pptx) marks only the raster images it embeds, so a
+        // vector/text-only page carries no mark — say "embedded images only" rather than
+        // overstate an unconditional in-pixel mark. Raster formats mark every pixel.
+        ? (imprintOn ? (isImprintContainerFormat(fmt) ? 'on · embedded images only' : 'on · in-pixel mark') : 'off')
+        : (imprintOn ? 'on (formats with pixels only)' : 'no pixels to mark');
       case 'durable': return DURABLE_FMTS.includes(fmt)
         ? (durableOn ? 'on · in-pixel mark' : 'off')
         : (durableOn ? 'on (raster formats only)' : 'raster only');
@@ -859,6 +874,11 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
       height: Number.isFinite(h) && h > 0 ? h : undefined,
       unit, dpi: Number.isFinite(dpiN) && dpiN > 0 ? dpiN : 300,
       c2paDays: C2PA_DAYS[c2paIdx] || undefined,
+      // The Imprint (pixel watermark). Resolved to an EXPLICIT boolean so every tier
+      // agrees: the Tier-A PNG path reads it to embed the mark browser-free, and the
+      // Tier-B path forwards imprint=0/1 (an undefined would let the web shell re-default
+      // it on, silently overriding an opt-out). Only sent for formats that carry pixels.
+      imprint: isImprintFormat(fmt) ? imprintOn : undefined,
       // Durable credential: only meaningful for raster formats the mark can ride in;
       // routes the export via the Tier-B web shell, whose durableEmbedCanvas embeds it.
       durable: durableOn && DURABLE_FMTS.includes(fmt) ? true : undefined,
@@ -1092,6 +1112,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
         if (f.key === 'format' && formats.length) { setFmtIdx(i => (i + (fwd ? 1 : -1) + formats.length) % formats.length); fmtLockedRef.current = true; }
         else if (f.key === 'unit') setUnitIdx(i => (i + (fwd ? 1 : -1) + UNITS.length) % UNITS.length);
         else if (f.key === 'c2pa') setC2paIdx(i => (i + (fwd ? 1 : -1) + C2PA_DAYS.length) % C2PA_DAYS.length);
+        else if (f.key === 'imprint') setImprintOn(v => !v);
         else if (f.key === 'durable') setDurableOn(v => !v);
         return;
       }

@@ -10,7 +10,7 @@ import { writeFile, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 // The DOM-free/raster format split + the resvg fast path + the export C2PA payload,
 // shared with the CLI (one implementation, no drift).
-import { NODE_FORMATS, pxDims, rasterizeSvgToPng } from '@lolly-tools/node-shell/raster';
+import { NODE_FORMATS, pxDims, eligibleForResvgPng, rasterizeTierAPng, canCarryPrintPrep, printPrepRefusal } from '@lolly-tools/node-shell/raster';
 import { buildExportC2paOpts } from '@lolly-tools/node-shell/c2pa-opts';
 import { assertRenderOk } from '@lolly-tools/node-shell/render-integrity';
 import type { RenderDims } from '@lolly-tools/node-shell/webshell-render';
@@ -121,6 +121,14 @@ export async function exportToFile(
 ): Promise<number> {
   await mkdir(dirname(outPath), { recursive: true });   // ensure the target folder exists
   const fmt = format.toLowerCase();
+  // Print prep that cannot be applied is a refusal, not a shrug (same guard the CLI runs in
+  // run.ts). Only pdf/pdf-cmyk/cmyk-tiff carry a bleed box or crop marks — nothing draws them
+  // onto a PNG/SVG/EPS on any tier, and the Tier-B browser's renderRaster ignores them too, so
+  // a png+bleed/marks link would otherwise write a file byte-identical to one without them,
+  // exit 0, with nothing to say so. Refuse by name instead. Shared message, no drift vs the CLI.
+  if ((dims.bleed || dims.marks) && !canCarryPrintPrep(fmt)) {
+    throw new Error(printPrepRefusal(fmt));
+  }
   const transform = isTransform(manifest);
   const write = async (bytes: Uint8Array, viaWebShell = false): Promise<number> => {
     // Optionally stamp Content Credentials (C2PA) as the LAST byte operation — same rule
@@ -188,14 +196,17 @@ export async function exportToFile(
   // 3b. PNG from an SVG-native tool: rasterise the engine's own SVG via resvg — no
   //     browser and no built web shell needed (the fast, always-available raster path,
   //     mirroring the MCP server's Tier A+resvg). resvg emits PNG only; jpg/webp/pdf
-  //     fall through to the web-shell tier below. An imprint or durable-credential
-  //     request also falls through — resvg can't embed either pixel mark, only the
-  //     web shell's export path can (same rule as shells/cli/src/raster.ts).
-  if (fmt === 'png' && !dims.imprint && !dims.durable) {
+  //     fall through to the web-shell tier below. The Imprint is embedded HERE too, in
+  //     the pixels, so imprint-by-default never drags a PNG into the browser tier (the
+  //     same fix shells/cli/src/raster.ts made). Only the DURABLE (neural TrustMark)
+  //     mark still needs the web shell's export path, so that alone falls through.
+  if (eligibleForResvgPng(fmt, dims)) {
     const svg = await renderSvg(runtime, dom);
     if (svg) {
-      const { width, height } = pxDims(dims, manifest as { render?: { width?: number; height?: number } });
-      const png = await rasterizeSvgToPng(svg, width, height);
+      // Shared Tier-A rasteriser (node-shell), identical to the CLI: imprint when asked
+      // (a frame below the detection floor returns the plain PNG unmarked, never fails)
+      // and the physical-unit DPI carried onto both the imprinted and plain paths.
+      const { bytes: png } = await rasterizeTierAPng(svg, dims, manifest as { render?: { width?: number; height?: number } });
       // Tier A rasterises the runtime's own SVG, so a swallowed hook failure yields a
       // blank PNG — gate it (the hookErrors signal catches what a byte-count can't).
       assertRenderOk({ hookErrors: runtime.hookErrors, format: fmt, bytes: png });

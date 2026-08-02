@@ -5,9 +5,8 @@
  * needs. No engine coupling: this is pure Node fs, mirroring shells/cli.
  */
 import { readFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { repoRoot } from '@lolly-tools/node-shell/repo-root';
 
 /** A denormalised tool row as the generated catalog index carries it. */
 export interface ToolEntry {
@@ -25,16 +24,11 @@ export interface ToolEntry {
   exportable?: boolean;
 }
 
-/** Repo root holding catalog/ — three levels up from shells/tui/src, or LOLLY_ROOT,
- *  or cwd (mirrors the CLI's resolveRepoRoot so a bundled run still finds it). */
-export function repoRoot(): string {
-  const marker = (r: string): boolean => existsSync(join(r, 'catalog', 'tools', 'index.json'));
-  if (process.env.LOLLY_ROOT && marker(process.env.LOLLY_ROOT)) return process.env.LOLLY_ROOT;
-  const rel = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-  if (marker(rel)) return rel;
-  if (marker(process.cwd())) return process.cwd();
-  return rel;
-}
+// repoRoot() is the ONE shared resolver (@lolly-tools/node-shell/repo-root): LOLLY_ROOT,
+// then a marker walk UP from the module dir (the only form that survives a bundled or
+// relocated layout), then cwd, then the monorepo-relative guess. This file used to carry
+// a weaker twin (fixed `../../..`, no walk-up, no cache); the CLI already consumes the
+// shared one, and the TUI reads the same catalog, so they must resolve it identically.
 
 /** All tools from the generated registry, in catalog order. */
 export async function loadTools(): Promise<ToolEntry[]> {

@@ -39,3 +39,19 @@ test('the panel is seeded with the manifest, so the policy can see the opt-outs'
   assert.match(SRC, /c2paIndexFromSetting\(rv\.c2pa, m\.manifest[^)]*\)/,
     'without the manifest argument the policy cannot honour render.c2pa:false or privacy:on-device');
 });
+
+test('the Imprint is an editable export row, defaulting on from the engine policy', () => {
+  assert.match(SRC, /\{ key: 'imprint', label: 'Imprint', kind: 'cycle' \}/,
+    'the Imprint must be a real togglable row, not a link-only knob');
+  assert.match(SRC, /import \{[^}]*\bimprintDefaultOn\b[^}]*\} from '@lolly\/engine'/,
+    'the same shared default-on policy the CLI and web use');
+  // Absent link param falls to the policy, exactly like C2PA; an explicit imprint=0/1 wins.
+  assert.match(SRC, /setImprintOn\(rv\.imprint \?\? imprintDefaultOn\(/,
+    'imprint defaults ON via the policy, opt-out per export');
+});
+
+test('the resolved imprint boolean is forwarded explicitly, never left undefined', () => {
+  // An undefined would let the Tier-B web shell re-default it on and override an opt-out.
+  assert.match(SRC, /imprint: isImprintFormat\(fmt\) \? imprintOn : undefined/,
+    'send an explicit boolean so every tier agrees, gated to formats that carry pixels');
+});
