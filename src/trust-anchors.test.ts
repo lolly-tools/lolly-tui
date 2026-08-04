@@ -32,7 +32,7 @@ await writeFile(empty, '-----BEGIN CERTIFICATE-----\n-----END CERTIFICATE-----\n
 const VENDORED = defaultTrustAnchors({ includeLollyRoot: false }).length;
 // The built-in set this shell actually verifies against: the vendored C2PA
 // known-certificate list PLUS the Lolly CA root, pinned on every surface as of
-// plans/cli-ga-contract.md §12 O1 (Andy, 2026-08-01).
+// plans/73-cli-ga-contract.md §12 O1 (Andy, 2026-08-01).
 const BUILTIN = VENDORED + 1;
 
 test('anchorPaths reads the env var as a PATH-style list', () => {
