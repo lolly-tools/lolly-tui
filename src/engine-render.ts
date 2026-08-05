@@ -160,8 +160,12 @@ export async function exportToFile(
   // 1. On-device transform utilities (strip-data, compress-pdf) produce bytes via the
   //    exportFile hook, not a render.
   if (transform) {
-    const { bytes } = await runtime.exportFile();
-    return write(bytes as Uint8Array);
+    // exportFile returns one result or a batch (a `multiple` file input). The CLI/TUI
+    // path is single-file (one --file arg → one --output), so take the first result.
+    const res = await runtime.exportFile();
+    const first = Array.isArray(res) ? res[0] : res;
+    if (!first?.bytes) throw new Error('exportFile produced no bytes');
+    return write(first.bytes as Uint8Array);
   }
 
   // 2. Capture tools (url-shot): drive Chromium straight at the target URL. Produces
