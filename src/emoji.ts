@@ -36,8 +36,7 @@ const TOOL: Record<string, string> = {
   'countdown-timer': '🕐', 'url-shot': '📸', 'street-map': '🌍', 'strip-data': '🔒',
   'text-helper': '📝', 'event-name-badge': '📛', 'wayfinding-signage': '🚏', 'brand-lockup': '🔖',
   'digi-ad': '📺', 'calendar-ics': '📅', 'compress-pdf': '📉', 'multi-page-pdf': '📚',
-  'filter-duotone': '🌗', 'filter-halftone': '🔘', 'filter-scanline': '📼', 'logo-wall': '🏁',
-  'filter-posterize': '🌈', 'diagram-builder': '🔗', 'filter-pixel-stretch': '🌀',
+  'filter': '🌗', 'logo-wall': '🏁', 'diagram-builder': '🔗',
   'logo-lockup-partner': '🏢', 'web-icon': '💠', 'layout-studio': '📐', 'lottie-digi-ad': '🎬',
   'pose-geeko': '🦎', 'voice-recorder': '🎤', 'top-tail-recorder': '📹',
 };
