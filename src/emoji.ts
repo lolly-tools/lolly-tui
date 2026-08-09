@@ -33,7 +33,7 @@ const TOOL: Record<string, string> = {
   'color-block': '🔷', 'dynamic-layout': '📰', 'quotes': '💬', 'meeting-planner': '💼',
   'code-canvas': '💻', 'qr-code': '🔳', 'daily-card': '📆', 'tool-logo': '🐧💚🦎',
   'email-signature': '📧', 'chart-creator': '📊', 'bag-video': '🎥', 'color-palette': '🎨',
-  'countdown-timer': '🕐', 'url-shot': '📸', 'street-map': '🌍', 'strip-data': '🔒',
+  'countdown-timer': '🕐', 'url-shot': '📸', 'strip-data': '🔒',
   'text-helper': '📝', 'event-name-badge': '📛', 'wayfinding-signage': '🚏', 'brand-lockup': '🔖',
   'digi-ad': '📺', 'calendar-ics': '📅', 'compress-pdf': '📉', 'multi-page-pdf': '📚',
   'filter': '🌗', 'logo-wall': '🏁', 'diagram-builder': '🔗',
