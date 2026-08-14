@@ -37,7 +37,7 @@ const TOOL: Record<string, string> = {
   'text-helper': '📝', 'event-name-badge': '📛', 'wayfinding-signage': '🚏', 'brand-lockup': '🔖',
   'digi-ad': '📺', 'calendar-ics': '📅', 'compress-pdf': '📉', 'multi-page-pdf': '📚',
   'filter': '🌗', 'logo-wall': '🏁', 'diagram-builder': '🔗',
-  'logo-lockup-partner': '🏢', 'web-icon': '💠', 'layout-studio': '📐', 'lottie-digi-ad': '🎬',
+  'logo-lockup-partner': '🏢', 'web-icon': '💠', 'design': '📐', 'lottie-digi-ad': '🎬',
   'pose-geeko': '🦎', 'voice-recorder': '🎤', 'top-tail-recorder': '📹',
 };
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
  * Design import → a saved Layout Studio session. Reads a PDF/.ai from disk, turns its
- * first page into editable boxes (import/pdf.ts), seeds a layout-studio runtime, and
+ * first page into editable boxes (import/pdf.ts), seeds a design runtime, and
  * saves the serialised state as a project — which then opens in the ToolView like any
  * other saved session (fully re-editable). Terminal scope is PDF/.ai; IDML/Penpot stay
  * a web feature (they need a DOM/canvas the Node shell doesn't have).
@@ -71,16 +71,16 @@ export async function importDesignFile(path: string, host: HostV1): Promise<Impo
     throw new Error('The terminal imports PDF and .ai files. For IDML or Penpot, use the web app.');
   }
   const bytes = new Uint8Array(await readFile(expandHome(path)));
-  // Mount first: the imported boxes must speak the ACTIVE profile's layout-studio
+  // Mount first: the imported boxes must speak the ACTIVE profile's design
   // vocabulary (fonts/seed colours from its manifest), not the engine's neutral one.
-  const { runtime, manifest } = await mountTool('layout-studio', host, '');
+  const { runtime, manifest } = await mountTool('design', host, '');
   const { boxes, background } = await parsePdfBytes(bytes, undefined, designMapFromManifest(manifest));
   await runtime.setInput('boxes', boxes as never);
   await runtime.setInput('background', background as never);
   const query = currentQuery(runtime);
 
   const label = `Imported ${basename(path)}`;
-  const slot = `layout-studio-${Date.now()}`;
-  await saveSession({ slot, toolId: 'layout-studio', label, query, updatedAt: new Date().toISOString() });
-  return { slot, label, query, toolId: 'layout-studio', boxes: boxes.length };
+  const slot = `design-${Date.now()}`;
+  await saveSession({ slot, toolId: 'design', label, query, updatedAt: new Date().toISOString() });
+  return { slot, label, query, toolId: 'design', boxes: boxes.length };
 }
