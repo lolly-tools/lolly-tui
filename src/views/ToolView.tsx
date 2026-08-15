@@ -826,7 +826,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
       setStatus(`✓ Set ${isToolUrl(r) ? 'tool render' : 'asset'} → ${r}`);
     } catch (e) { setStatus('Asset error: ' + (e as Error).message); }
   }
-  // Set a block row's `asset` field (e.g. a Layout Studio box image) to a catalog asset.
+  // Set a block row's `asset` field (e.g. a Design box image) to a catalog asset.
   async function setFieldAsset(fieldId: string, raw: string): Promise<void> {
     const r = raw.trim(); if (!r) { setField(fieldId, null); return; }
     try { setField(fieldId, await resolveAssetRef(r)); setStatus(`✓ Set image → ${r}`); }
@@ -1031,7 +1031,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
       if (t === 'asset') { if (key.return || input === 'e') void openAssetPicker({ type: 'field', id: f.id }); return; }
       if (key.return || input === 'e') {
         // Multi-line block text (longtext fields, or ones flagged multilineFor — e.g. a
-        // Layout Studio box's body) get the full editor; others the single-line field.
+        // Design box's body) get the full editor; others the single-line field.
         setDraft(fieldStr(row[f.id]));
         setMode(t === 'longtext' || (f.multilineFor && f.multilineFor.length) ? 'editml' : 'editing');
         return;

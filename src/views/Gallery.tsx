@@ -31,7 +31,7 @@ export function Gallery({ tools, onOpen, onOpenUrl, onImportFile, onNav, onQuit 
   const [urlMode, setUrlMode] = useState(false);
   const [urlDraft, setUrlDraft] = useState('');
   const [urlErr, setUrlErr] = useState('');
-  // Import a PDF/.ai file → Layout Studio session (`i`).
+  // Import a PDF/.ai file → Design session (`i`).
   const [importMode, setImportMode] = useState(false);
   const [importDraft, setImportDraft] = useState('');
   const [importErr, setImportErr] = useState('');
@@ -191,7 +191,7 @@ export function Gallery({ tools, onOpen, onOpenUrl, onImportFile, onNav, onQuit 
         )}
 
       <Footer
-        note={importErr ? (importErr === 'Importing…' ? importErr : `⚠ ${importErr}`) : importMode ? 'Type a path to a PDF or .ai file, ⏎ to import as an editable Layout Studio project' : urlErr ? `⚠ ${urlErr}` : urlMode ? 'Paste a lolly.tools tool link, ⏎ to open · esc cancels' : filtered[clamped]?.description}
+        note={importErr ? (importErr === 'Importing…' ? importErr : `⚠ ${importErr}`) : importMode ? 'Type a path to a PDF or .ai file, ⏎ to import as an editable Design project' : urlErr ? `⚠ ${urlErr}` : urlMode ? 'Paste a lolly.tools tool link, ⏎ to open · esc cancels' : filtered[clamped]?.description}
         shortcuts={[
           { key: 'hjkl', label: 'move' },
           { key: '⏎', label: 'open' },

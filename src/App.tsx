@@ -47,7 +47,7 @@ export function App({ tools, bridge }: { tools: ToolEntry[]; bridge: TuiBridge }
     return null;
   };
 
-  // Import a PDF/.ai file → a saved Layout Studio session, then open it. Returns an error
+  // Import a PDF/.ai file → a saved Design session, then open it. Returns an error
   // string to surface, or null on success (navigated to the new session).
   const importFile = async (path: string): Promise<string | null> => {
     try {

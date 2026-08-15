@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * Design import → a saved Layout Studio session. Reads a PDF/.ai from disk, turns its
+ * Design import → a saved Design session. Reads a PDF/.ai from disk, turns its
  * first page into editable boxes (import/pdf.ts), seeds a design runtime, and
  * saves the serialised state as a project — which then opens in the ToolView like any
  * other saved session (fully re-editable). Terminal scope is PDF/.ai; IDML/Penpot stay
@@ -63,7 +63,7 @@ export function designMapFromManifest(manifest: Manifest): DesignMapOptions {
   };
 }
 
-/** Import a PDF/.ai file → a saved Layout Studio project. Returns the session so the
+/** Import a PDF/.ai file → a saved Design project. Returns the session so the
  *  caller can open it immediately. Throws a user-facing message on any failure. */
 export async function importDesignFile(path: string, host: HostV1): Promise<ImportedSession> {
   const ext = extname(path).toLowerCase();

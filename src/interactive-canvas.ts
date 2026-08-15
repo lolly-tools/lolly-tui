@@ -7,7 +7,7 @@
  * focusable controls (buttons/tabs/inputs), and lets the shell click them and type into
  * them — the tool's own listeners fire, its DOM updates, and html-render re-reads it.
  *
- * DOM-only tools work fully; canvas/WebGL tools (Layout Studio, filters) don't — jsdom has
+ * DOM-only tools work fully; canvas/WebGL tools (Design, filters) don't — jsdom has
  * no 2D context — so those degrade to whatever DOM controls they expose. `createInteractive`
  * returns null when the template ships no <script> (nothing to run).
  */
