@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * Contract tests for the TUI's pure blocks-tree helpers (lib/block-tree.ts) — the module
+ * Contract tests for the TUI's pure blocks-tree helpers (lib/block-tree.ts) - the module
  * the terminal block editor's row list, nesting gate and reparenting all read from. Pure
  * and DOM-free, so they run under `node --test` with nothing mounted.
  */

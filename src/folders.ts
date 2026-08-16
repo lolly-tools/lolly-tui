@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * Folders — organise saved sessions into named, nestable groups.
+ * Folders - organise saved sessions into named, nestable groups.
  *
  * The web shell stores folders on the single profile record (host.profile). The TUI has
- * no such facade — its store is plain JSON files under the config dir (`~/.lolly`, or
+ * no such facade - its store is plain JSON files under the config dir (`~/.lolly`, or
  * $LOLLY_TUI_DIR), one file per saved session (see store.ts). So folders get their OWN
- * file, `folders.json`, holding a bare `Folder[]`. This module mirrors the SHAPE of the
+ * file, `folders.json`, holding a bare `Folder[]`. This module mirrors the STRUCTURE of the
  * web `folders.ts` (same tree semantics: single-rooted hierarchy, a session belongs to at
  * most one folder, cycles are refused) but the persistence is a flat read-modify-write of
- * one JSON array — it does NOT reuse the browser code, which is a host.profile facade.
+ * one JSON array - it does NOT reuse the browser code, which is a host.profile facade.
  *
- * Only sessions live in TUI folders (no user-image assets — the terminal has none). A
+ * Only sessions live in TUI folders (no user-image assets - the terminal has none). A
  * folder record referencing a session that was later deleted from Projects self-heals via
- * `prune(validSlots)` on load. Deleting a folder never deletes the sessions it held — they
+ * `prune(validSlots)` on load. Deleting a folder never deletes the sessions it held - they
  * revert to "uncategorised".
  */
 import { homedir } from 'node:os';
@@ -113,7 +113,7 @@ export async function renameFolder(id: string, name: string): Promise<void> {
 
 /**
  * Cascade-delete `id` AND its whole subtree of sub-folders. The referenced sessions are
- * NOT deleted from disk — they revert to "uncategorised". Returns the removed folder ids.
+ * NOT deleted from disk - they revert to "uncategorised". Returns the removed folder ids.
  */
 export async function removeFolder(id: string): Promise<{ removed: string[] }> {
   return mutate(folders => {
@@ -191,7 +191,7 @@ export async function prune(validSlots: readonly string[]): Promise<{ removed: n
   return { removed };
 }
 
-// ── Pure tree helpers (sync; operate on a passed folders array — no disk read) ─
+// ── Pure tree helpers (sync; operate on a passed folders array - no disk read) ─
 const parentOf = (f: Folder): string | null => f?.parentId ?? null;
 
 /**
@@ -238,7 +238,7 @@ export function folderOfRef(folders: readonly Folder[], ref: string): string | n
   return folders.find(f => f.items.some(it => it.ref === ref))?.id ?? null;
 }
 
-/** `allSlots` minus every referenced ref — the "uncategorised" bucket the Projects view shows. */
+/** `allSlots` minus every referenced ref - the "uncategorised" bucket the Projects view shows. */
 export function uncategorisedRefs(folders: readonly Folder[], allSlots: readonly string[]): string[] {
   const claimed = new Set(folders.flatMap(f => f.items.map(it => it.ref)));
   return allSlots.filter(s => !claimed.has(s));

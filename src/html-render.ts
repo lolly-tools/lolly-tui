@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
  * HTML → terminal text. Text-based/interactive UTILITIES (text-helper, color-palette,
- * countdown-timer) don't produce a file you export — their rendered HTML IS the point.
+ * countdown-timer) don't produce a file you export - their rendered HTML IS the point.
  * So instead of a raster half-block (meaningless for text) or an "export to view" banner,
  * the TUI walks the tool's hydrated DOM and renders its CONTENT as structured, coloured
  * terminal text: headings bold, blocks on their own lines, buttons/tabs marked, and a
@@ -67,7 +67,7 @@ function swatchColor(el: El, varMap: Map<string, string>): string | undefined {
 
 const isHidden = (el: El): boolean => el.hasAttribute('hidden') || /display\s*:\s*none|visibility\s*:\s*hidden/i.test(el.getAttribute('style') ?? '');
 
-/** The live value of a field — the PROPERTY first (jsdom doesn't reflect a script-set
+/** The live value of a field - the PROPERTY first (jsdom doesn't reflect a script-set
  *  `.value` back to the attribute), then the value attribute, then the placeholder. */
 function fieldValue(el: El): { text: string; placeholder: boolean } {
   const prop = typeof el.value === 'string' ? el.value : undefined;

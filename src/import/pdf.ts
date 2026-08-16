@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * PDF / Adobe Illustrator (.ai) design import for the TUI — a DOM-free port of the web
+ * PDF / Adobe Illustrator (.ai) design import for the TUI - a DOM-free port of the web
  * shell's pdf-import.ts. It uses pdf-lib to walk the first page's content stream +
  * resources, hands them to the PURE engine interpreter (`interpretPdfPage`, no DOM), and
  * `finalizeBoxes` into a Design boxes array. Text frames import as editable text;
  * vector paths and embedded images become positioned COLOUR BOXES (the web resolves those
- * to stored SVG/PNG assets via a canvas — not available in Node, so we keep the geometry
+ * to stored SVG/PNG assets via a canvas - not available in Node, so we keep the geometry
  * and fill and drop the pixels). Enough to re-lay-out and re-edit a design in the terminal.
  */
 import {
@@ -22,7 +22,7 @@ interface ImportNode extends PdfNode { image?: unknown }
 interface Resources { fonts: Record<string, PdfFontInfo>; xobjects: Record<string, PdfXObject>; extgstates: Record<string, { ca?: number; CA?: number }>; ocgs: Record<string, string> }
 
 /** Parse PDF/.ai bytes into a Design boxes array (first page). `map` is the
- *  target tool's brand vocabulary (font select values + addKinds seed colours) —
+ *  target tool's brand vocabulary (font select values + addKinds seed colours) - 
  *  see designMapFromManifest in import-design.ts; unset fields fall back to the
  *  engine's neutral lolly-start defaults. */
 export async function parsePdfBytes(bytes: Uint8Array, warn: (m: string) => void = () => {}, map?: DesignMapOptions): Promise<DesignImport> {

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * Persistent, on-device store for the TUI — the CLI shell is ephemeral (in-memory),
+ * Persistent, on-device store for the TUI - the CLI shell is ephemeral (in-memory),
  * but a usable interactive shell needs saved projects and a profile that stick. Both
  * are plain JSON under a config dir (`~/.lolly`, or $LOLLY_TUI_DIR). No network, no DB
- * — files on disk, matching the offline-first ethos of every other shell.
+ * - files on disk, matching the offline-first ethos of every other shell.
  */
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -16,7 +16,7 @@ const PROFILE_PATH = join(DIR, 'profile.json');
 
 export function configDir(): string { return DIR; }
 
-/** Where exports land by default — the user's Desktop (falls back to home). Created on
+/** Where exports land by default - the user's Desktop (falls back to home). Created on
  *  write if missing (see engine-render.exportToFile). */
 export function defaultExportDir(): string {
   const desktop = join(homedir(), 'Desktop');
@@ -25,7 +25,7 @@ export function defaultExportDir(): string {
 
 async function ensure(): Promise<void> { await mkdir(SESSIONS_DIR, { recursive: true }); }
 
-/** A saved "project" — a tool plus its serialised URL-state, so it reopens through
+/** A saved "project" - a tool plus its serialised URL-state, so it reopens through
  *  the same parseUrlState round-trip the web/CLI use (robust across value shapes). */
 export interface SavedSession {
   slot: string;
@@ -59,7 +59,7 @@ export async function deleteSession(slot: string): Promise<void> {
   try { await unlink(join(SESSIONS_DIR, slot + '.json')); } catch { /* already gone */ }
 }
 
-/** Rename a saved session (its display label only) — keeps slot + updatedAt so its
+/** Rename a saved session (its display label only) - keeps slot + updatedAt so its
  *  position in the 'recent' order doesn't jump. */
 export async function renameSession(slot: string, label: string): Promise<void> {
   const p = join(SESSIONS_DIR, slot + '.json');
@@ -79,7 +79,7 @@ export async function setProfile(p: Record<string, unknown>): Promise<void> {
 }
 
 /** Back up everything the TUI persists (all saved projects + profile + folders) into a
- *  single portable zip on the Desktop — the "export my data" half of the web feature.
+ *  single portable zip on the Desktop - the "export my data" half of the web feature.
  *  Reopenable: each project keeps its serialised URL-state. Returns the written path. */
 export async function backupData(stamp: string): Promise<{ path: string; count: number }> {
   const { zipSync, strToU8 } = await import('fflate');

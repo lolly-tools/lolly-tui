@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
  * Optional inline preview. We rasterise the tool's SVG with resvg (pure Rust, no
- * browser) and return a grid of HALF-BLOCK cells — each cell is a character plus a
+ * browser) and return a grid of HALF-BLOCK cells - each cell is a character plus a
  * foreground/background hex colour that INK applies via its own <Text> props. We do
  * NOT emit raw ANSI escape codes ourselves: Ink owns the screen and mangles injected
  * SGR sequences (that produced the `▀;0;0m` garbage). Letting Ink colour the cells is

@@ -2,7 +2,7 @@
 /**
  * Design import → a saved Design session. Reads a PDF/.ai from disk, turns its
  * first page into editable boxes (import/pdf.ts), seeds a design runtime, and
- * saves the serialised state as a project — which then opens in the ToolView like any
+ * saves the serialised state as a project - which then opens in the ToolView like any
  * other saved session (fully re-editable). Terminal scope is PDF/.ai; IDML/Penpot stay
  * a web feature (they need a DOM/canvas the Node shell doesn't have).
  */
@@ -20,8 +20,8 @@ const expandHome = (p: string): string => (p.startsWith('~') && (p.length === 1 
 export interface ImportedSession { slot: string; label: string; query: string; toolId: string; boxes: number }
 
 /** Brand vocabulary for the importer (engine DesignMapOptions), derived from the
- *  target tool's OWN manifest — its font select wire values + addKinds seed colours
- *  — mirroring the web shell's importMap (free-canvas.ts) so a TUI import emits the
+ *  target tool's OWN manifest - its font select wire values + addKinds seed colours
+ * - mirroring the web shell's importMap (free-canvas.ts) so a TUI import emits the
  *  same boxes as a web import under any profile (SUSE: 'SUSE'/'SUSE Mono' + its
  *  seeds; lolly-start: 'sans'/'mono'). Fields the manifest doesn't declare stay
  *  undefined → the engine's neutral defaults apply. */
@@ -40,7 +40,7 @@ export function designMapFromManifest(manifest: Manifest): DesignMapOptions {
   const addKinds = Array.isArray(cv.addKinds)
     ? (cv.addKinds as Array<{ id?: unknown; seed?: Record<string, unknown> }>) : [];
   // '' is a real seed value (transparent fill), so only a missing/non-string seed
-  // defers to the engine default — same rule as the web importMap.
+  // defers to the engine default - same rule as the web importMap.
   const seedColor = (kindId: string, field: string): string | undefined => {
     const seed = addKinds.find((k) => k.id === kindId)?.seed;
     const v = seed ? seed[field] : undefined;

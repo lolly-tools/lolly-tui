@@ -2,11 +2,11 @@
 /**
  * TUI capability bridge.
  *
- * The TUI is "the CLI bridge under an interactive transport" — same Node + jsdom
+ * The TUI is "the CLI bridge under an interactive transport" - same Node + jsdom
  * render path, same filesystem assets and in-memory state. So it REUSES the CLI's
  * `createCliBridge` verbatim (proving again that the engine/tools don't care which
  * shell they run in) with exactly one change: the CLI writes `host.log` to
- * stdout/stderr, which would corrupt Ink's managed screen — so we redirect it into
+ * stdout/stderr, which would corrupt Ink's managed screen - so we redirect it into
  * an in-memory buffer the UI can surface instead.
  */
 import { JSDOM } from 'jsdom';
@@ -17,7 +17,7 @@ import type { HostV1, Profile } from '@lolly-tools/core/host-v1';
 export interface TuiBridge {
   host: HostV1;
   dom: JSDOM;
-  /** Captured host.log lines (stdout is Ink's — never write there). */
+  /** Captured host.log lines (stdout is Ink's - never write there). */
   logs: string[];
 }
 
@@ -56,7 +56,7 @@ export async function createTuiBridge(profile: Profile = {}): Promise<TuiBridge>
   };
 
   // host.capture is now real in the shared CLI bridge (backed by the same scoped Chromium),
-  // so the TUI inherits it — no override needed. url-shot's export still routes straight to
+  // so the TUI inherits it - no override needed. url-shot's export still routes straight to
   // captureUrl in engine-render.ts; this fulfils the 'capture' capability for hook callers.
 
   return { host, dom, logs };

@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * ASCII mockups — a structural wireframe of a designer tool's layout, drawn with
+ * ASCII mockups - a structural wireframe of a designer tool's layout, drawn with
  * box-drawing characters so you can judge composition and positioning in the terminal
  * WITHOUT a browser or a raster. Two paths, auto-selected:
  *
- *  • Spatial (SVG tools — chart, badge-on-svg, pose-geeko, diagram): read the viewBox,
+ *  • Spatial (SVG tools - chart, badge-on-svg, pose-geeko, diagram): read the viewBox,
  *    scale every positioned shape/text into a character grid, and draw shaded boxes where
  *    the graphics sit + the actual text where the text sits. This is true positioning.
- *  • Structural (HTML-layout tools — event badge, wayfinding, lockup): jsdom computes no
- *    layout, so instead draw the DOM's container hierarchy as NESTED labelled boxes — a
+ *  • Structural (HTML-layout tools - event badge, wayfinding, lockup): jsdom computes no
+ *    layout, so instead draw the DOM's container hierarchy as NESTED labelled boxes - a
  *    document-outline wireframe (header / body / footer …) that still conveys the shape.
  *
  * Terminal cells are ~twice as tall as wide, so the spatial path compensates (CELL_ASPECT)

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * Pure, DOM-free helpers for tree-shaped `blocks` inputs — a trimmed copy of the
+ * Pure, DOM-free helpers for tree-shaped `blocks` inputs - a trimmed copy of the
  * web shell's `shells/web/src/views/block-tree.ts` (which the TUI can't import
  * across the shell boundary). Only the pieces the terminal block editor needs:
  * effective-key derivation, parent-index resolution, pre-order tree layout, and
@@ -97,7 +97,7 @@ export function blockParentIndex(rows: BlockRow[], keys: string[], parentField: 
 }
 
 /**
- * Pre-order [{idx, depth}] over the parent forest — the order the sidebar renders
+ * Pre-order [{idx, depth}] over the parent forest - the order the sidebar renders
  * a tree in. Cycle/orphan-safe: any row not reached from a root is appended as its
  * own root (matches the tool's buildTree promoting orphans).
  */

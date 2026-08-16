@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * Trust-anchor assembly for the TUI's verify path — the terminal twin of the CLI's
+ * Trust-anchor assembly for the TUI's verify path - the terminal twin of the CLI's
  * repeatable `--trust-anchor=<root.pem>` (shells/cli/src/validate.ts).
  *
  * Why this file exists: the TUI verifies bytes with the SAME engine verifier the CLI and
  * the web /valid view run, but it has no argv to carry pinned CA roots. Without a source
  * for them the identical file verified as "Verified" in the CLI (`--trust-anchor=corp.pem`)
- * read plain untrusted here — a confidently wrong verdict in a trust tool. Anchors are
+ * read plain untrusted here - a confidently wrong verdict in a trust tool. Anchors are
  * therefore sourced from the two places a long-lived interactive shell can read:
  *
- *   1. `LOLLY_TRUST_ANCHOR` — a PATH-style list (path.delimiter separated) of PEM files.
+ *   1. `LOLLY_TRUST_ANCHOR` - a PATH-style list (path.delimiter separated) of PEM files.
  *   2. `trustAnchors` on the persisted profile record (~/.lolly/profile.json, store.ts),
  *      editable from the Profile view. A string (same PATH-style list) or an array.
  *
@@ -47,7 +47,7 @@ export interface ResolvedAnchors {
   loaded: AnchorSource[];
   /** Pinned PEMs that could not be read or parsed, with the reason. */
   failed: Array<AnchorSource & { reason: string }>;
-  /** Whether the Lolly CA root was pinned (always true today — see the header). */
+  /** Whether the Lolly CA root was pinned (always true today - see the header). */
   lollyRoot: boolean;
 }
 
@@ -125,14 +125,14 @@ export async function loadTrustAnchors(
 }
 
 /**
- * The verdict panel's "which anchor set produced this?" lines. Pure — one line per fact,
+ * The verdict panel's "which anchor set produced this?" lines. Pure - one line per fact,
  * so a user can tell WHY something reads untrusted instead of guessing.
  */
 export function describeAnchors(r: ResolvedAnchors): Array<{ text: string; warn: boolean }> {
   const out: Array<{ text: string; warn: boolean }> = [];
   // The sentence itself comes from the SHARED module, so the CLI's validate report and
   // this panel cannot describe the same anchor set in two different ways. Only the
-  // per-source suffix (`(LOLLY_TRUST_ANCHOR)` / `(profile)`) is this shell's own — the
+  // per-source suffix (`(LOLLY_TRUST_ANCHOR)` / `(profile)`) is this shell's own - the
   // CLI has one channel for pinned roots and does not need it.
   out.push({
     text: '  ' + describeAnchorSet({

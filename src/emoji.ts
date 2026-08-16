@@ -2,12 +2,12 @@
 /**
  * Emoji for export formats + tool categories (gallery cards, tool header, export box).
  *
- * ALIGNMENT RULE — the cards are a fixed-width grid, so a glyph whose terminal width ≠
+ * ALIGNMENT RULE - the cards are a fixed-width grid, so a glyph whose terminal width ≠
  * Ink's `string-width` drifts the borders. TWO traps:
- *   1. Variation selectors (`️`/VS16) — e.g. 🖼️ measures 1 but renders 2. Never use them.
- *   2. Codepoints OUTSIDE U+1F300–1F5FF — dingbats like ✨ (U+2728) and post-2016 emoji
+ *   1. Variation selectors (`️`/VS16) - e.g. 🖼️ measures 1 but renders 2. Never use them.
+ *   2. Codepoints OUTSIDE U+1F300–1F5FF - dingbats like ✨ (U+2728) and post-2016 emoji
  *      (🧾 🧩) render width-1 in some terminals/fonts even though string-width says 2.
- * So every glyph below is a single Unicode-6.0 (2010) emoji in U+1F300–1F5FF-ish — the
+ * So every glyph below is a single Unicode-6.0 (2010) emoji in U+1F300–1F5FF-ish - the
  * set every terminal reliably draws double-wide. Keep it that way.
  */
 const FMT: Record<string, string> = {
@@ -24,10 +24,10 @@ const CAT: Record<string, string> = {
   everyone: '👥', designer: '🎨', event: '🎫', utility: '🔧',
 };
 
-// Per-tool NAME-line icon (by tool id) — a specific emoji for the TYPE of each tool.
+// Per-tool NAME-line icon (by tool id) - a specific emoji for the TYPE of each tool.
 // Kept single-codepoint + mostly within U+1F300–1F5FF so the fixed-width card borders stay
 // aligned. Two intentional exceptions: `tool-logo` uses the 🐧💚🦎 ligature (the SUSE brand
-// font renders it as the logo), and `pose-geeko` uses 🦎 (the Geeko) — both font/width
+// font renders it as the logo), and `pose-geeko` uses 🦎 (the Geeko) - both font/width
 // trade-offs on a single card. Unmapped tools fall back to the category emoji.
 const TOOL: Record<string, string> = {
   'color-block': '🔷', 'dynamic-layout': '📰', 'quotes': '💬', 'meeting-planner': '💼',

@@ -2,7 +2,7 @@
 /**
  * Contract tests for the TUI's folder store (folders.ts): the pure tree helpers (BFS-ish
  * child/descendant walks, breadcrumbs, the uncategorised bucket) AND the persisted CRUD,
- * which is where the two rules that matter live — cascade delete never touches sessions,
+ * which is where the two rules that matter live - cascade delete never touches sessions,
  * and a session belongs to at most one folder.
  *
  * `folders.ts` reads $LOLLY_TUI_DIR ONCE at module load, so the env var is set before the

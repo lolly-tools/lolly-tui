@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * Favourite tools — the user's starred collection, stored on the profile under
+ * Favourite tools - the user's starred collection, stored on the profile under
  * `profile.favourites` (the SAME key the web shell uses, see shells/web/src/lib/
  * favourites.ts), so a device that runs both shells shares the set. Pure helpers over a
  * plain profile record; the gallery stars a tool, floats favourites up, and offers a

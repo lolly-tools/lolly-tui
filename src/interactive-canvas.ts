@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * Interactive canvas — runs a tool's OWN JavaScript in a script-enabled jsdom so the TUI
+ * Interactive canvas - runs a tool's OWN JavaScript in a script-enabled jsdom so the TUI
  * can actually USE the DOM-based tools (Text Helper's tabs + transforms, Colour Palette,
  * countdown, …), not just render a static snapshot. It mounts the hydrated template into a
  * `runScripts` jsdom (injecting the handful of globals jsdom omits), exposes the tool's
  * focusable controls (buttons/tabs/inputs), and lets the shell click them and type into
- * them — the tool's own listeners fire, its DOM updates, and html-render re-reads it.
+ * them - the tool's own listeners fire, its DOM updates, and html-render re-reads it.
  *
- * DOM-only tools work fully; canvas/WebGL tools (Design, filters) don't — jsdom has
- * no 2D context — so those degrade to whatever DOM controls they expose. `createInteractive`
+ * DOM-only tools work fully; canvas/WebGL tools (Design, filters) don't - jsdom has
+ * no 2D context - so those degrade to whatever DOM controls they expose. `createInteractive`
  * returns null when the template ships no <script> (nothing to run).
  */
 import { JSDOM } from 'jsdom';
@@ -30,7 +30,7 @@ export function isInteractiveHtml(html: string): boolean {
   return /<script[\s>]/i.test(html);
 }
 
-// jsdom builds no layout, so offsetParent is always null — judge visibility structurally.
+// jsdom builds no layout, so offsetParent is always null - judge visibility structurally.
 function shown(el: Element): boolean {
   if ((el as HTMLElement).hidden) return false;
   if (el.closest('[hidden]')) return false;
@@ -53,7 +53,7 @@ function labelFor(el: Element): string {
   try {
     const forLabel = id ? el.ownerDocument?.querySelector(`label[for="${id.replace(/"/g, '\\"')}"]`) : null;
     assoc = (forLabel?.textContent ?? el.closest('label')?.textContent ?? '').replace(/\s+/g, ' ').trim();
-  } catch { /* exotic id — skip */ }
+  } catch { /* exotic id - skip */ }
   if (assoc) return assoc;
   const ph = el.getAttribute('placeholder');
   if (ph) return ph.trim();
@@ -96,14 +96,14 @@ export class InteractiveCanvas {
     w.TextDecoder ??= TextDecoder;
     // Clipboard capture: the utilities copy via navigator.clipboard.writeText (colour
     // values, de-identified maps). jsdom has no clipboard, so shim one that records the
-    // text — the shell forwards it to the real OS clipboard after the interaction.
+    // text - the shell forwards it to the real OS clipboard after the interaction.
     try {
       Object.defineProperty(this.win.navigator, 'clipboard', {
         configurable: true,
         value: { writeText: (t: unknown) => { this.copied = String(t ?? ''); return Promise.resolve(); }, readText: () => Promise.resolve('') },
       });
-    } catch { /* navigator locked down — copy just won't be captured */ }
-    // execCommand('copy') fallback path — capture the current selection instead.
+    } catch { /* navigator locked down - copy just won't be captured */ }
+    // execCommand('copy') fallback path - capture the current selection instead.
     try {
       (this.doc as unknown as { execCommand: (c: string) => boolean }).execCommand = (cmd: string) => {
         if (cmd === 'copy') { const s = this.win.getSelection?.()?.toString(); if (s) this.copied = s; }
@@ -111,7 +111,7 @@ export class InteractiveCanvas {
       };
     } catch { /* ignore */ }
     if (styleText) { const st = this.doc.createElement('style'); st.textContent = styleText; this.doc.head.appendChild(st); }
-    this.doc.body.innerHTML = html;               // markup in — inline scripts are inert
+    this.doc.body.innerHTML = html;               // markup in - inline scripts are inert
     // Re-create each <script> so it EXECUTES, now that the globals are in place.
     for (const old of Array.from(this.doc.querySelectorAll('script'))) {
       const s = this.doc.createElement('script');
@@ -142,7 +142,7 @@ export class InteractiveCanvas {
   /** Return (and clear) any text a copy button wrote since the last call. */
   takeCopy(): string | null { const c = this.copied; this.copied = null; return c; }
 
-  /** Click a control — the tool's own listeners run and mutate the DOM. */
+  /** Click a control - the tool's own listeners run and mutate the DOM. */
   activate(el: Element): void {
     if (el.tagName.toLowerCase() === 'input' && (el as HTMLInputElement).type === 'checkbox') {
       (el as HTMLInputElement).checked = !(el as HTMLInputElement).checked;

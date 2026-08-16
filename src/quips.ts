@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
  * Playful "rendering…" lines for the Progress panel. Kept short (≲ 42 chars) so each
- * fits one Panel line at the narrow (cols < 80) breakpoint, and plain-text only — NO
+ * fits one Panel line at the narrow (cols < 80) breakpoint, and plain-text only - NO
  * width-2 emoji (the panel is a fixed-width grid; an emoji would drift the border).
  */
 export const QUIPS: readonly string[] = [
@@ -27,7 +27,7 @@ export const QUIPS: readonly string[] = [
   'Almost there — buffing the edges…',
 ];
 
-/** Deterministic rotation by tick index — `QUIPS[i % QUIPS.length]`. Progress.tsx bumps
+/** Deterministic rotation by tick index - `QUIPS[i % QUIPS.length]`. Progress.tsx bumps
  *  `i` on a timer so the line cycles without re-randomising on every React re-render. */
 export function quipAt(i: number): string {
   const n = QUIPS.length;

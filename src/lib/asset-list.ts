@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * Pure helpers for browsing catalog assets in the terminal — shared by the Catalog
+ * Pure helpers for browsing catalog assets in the terminal - shared by the Catalog
  * view and the ToolView asset-input picker so both render/filter identically. No React,
  * no fs: takes an already-loaded AssetRow[] (see catalog.loadAssets).
  *
@@ -9,7 +9,7 @@
  */
 import type { AssetRow } from '../catalog.ts';
 
-// Asset types that resolve to a picture — the only ones offered as an `asset` INPUT
+// Asset types that resolve to a picture - the only ones offered as an `asset` INPUT
 // (a logo/photo slot). tokens/palette/audio are catalog assets but not image inputs.
 export const VISUAL_TYPES = new Set(['vector', 'raster', 'lottie']);
 

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
-// Live terminal size — drives the responsive layout (wide = desktop two-pane,
+// Live terminal size - drives the responsive layout (wide = desktop two-pane,
 // narrow = mobile single-column), re-rendering on resize just like a CSS breakpoint.
 import { useStdout } from 'ink';
 import { useState, useEffect } from 'react';

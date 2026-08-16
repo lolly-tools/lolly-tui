@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * Favourite / hidden catalog assets, stored on the user PROFILE — the same
+ * Favourite / hidden catalog assets, stored on the user PROFILE - the same
  * `profile.favouriteAssets` / `profile.hiddenAssets` string arrays the web shell uses
  * (see shells/web/src/lib/asset-favourites.ts). Favourites sort to the top of the
  * catalog + the asset picker; hidden assets drop out of the picker. Pure helpers over a

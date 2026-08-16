@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * Catalog access for the TUI — reads the same on-disk registry the CLI does
+ * Catalog access for the TUI - reads the same on-disk registry the CLI does
  * (`catalog/tools/index.json`) and provides the tool-file fetcher `loadTool`
  * needs. No engine coupling: this is pure Node fs, mirroring shells/cli.
  */

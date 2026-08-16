@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * Contract tests for `planFolderRefs` (batch-export.ts) — the render plan a folder export
+ * Contract tests for `planFolderRefs` (batch-export.ts) - the render plan a folder export
  * walks: which sessions land in the zip and at which relative path. It is exported
  * precisely so it can be inspected without running a render, and the Projects view's
  * format step reads the SAME plan, so a drift here silently changes what a user gets in

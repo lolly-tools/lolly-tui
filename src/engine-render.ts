@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * Engine glue — the SAME render path the CLI/web use, driven interactively.
+ * Engine glue - the SAME render path the CLI/web use, driven interactively.
  * mountTool → createRuntime; renderSvg turns the current state into an SVG string
  * (for the terminal preview); exportToFile writes a real file via the Node bridge.
  */
@@ -17,7 +17,7 @@ import type { RenderDims } from '@lolly-tools/node-shell/webshell-render';
 import { toolFetchFile } from './catalog.ts';
 import { getProfile } from './store.ts';
 // The same allowlisted-fetch module every shell builds host.net from (the web
-// bridge re-exports this one) — one matcher, no drift.
+// bridge re-exports this one) - one matcher, no drift.
 import { createNetAPI } from '@lolly-tools/node-shell/net';
 import type { HostV1, Profile } from '@lolly-tools/core/host-v1';
 import type { JSDOM } from 'jsdom';
@@ -34,11 +34,11 @@ export interface MountResult { runtime: Runtime; manifest: Manifest; reserved: U
 export async function mountTool(
   toolId: string, host: HostV1, query = '',
 ): Promise<MountResult> {
-  // Expand a packed `z=` share link FIRST (mirrors shells/cli/src/run.ts) — a no-op on a
+  // Expand a packed `z=` share link FIRST (mirrors shells/cli/src/run.ts) - a no-op on a
   // readable or empty query. Without this the TUI silently loads a packed link at defaults.
   const expanded = query ? await expandQuery(query) : '';
   // Read `lang` before loadTool so a `?lang=de` link localizes the manifest via
-  // applyManifestI18n (same as the CLI's run.ts) — even a lang packed inside `z=`.
+  // applyManifestI18n (same as the CLI's run.ts) - even a lang packed inside `z=`.
   const lang = expanded ? normalizeLang(new URLSearchParams(expanded).get('lang')) ?? undefined : undefined;
   const tool = await loadTool(toolId, toolFetchFile(), { lang });
   // Rebuild host.net from THIS tool's network.allowlist (mirrors the web view's
@@ -54,7 +54,7 @@ export async function mountTool(
   return { runtime, manifest: tool.manifest, reserved };
 }
 
-/** The current state as a URL query — what a saved session stores + reopens from. */
+/** The current state as a URL query - what a saved session stores + reopens from. */
 export function currentQuery(runtime: Runtime): string {
   return serializeUrlState(runtime.getModel());
 }
@@ -71,13 +71,13 @@ export function exportableFormats(manifest: Manifest): string[] {
   return ok;
 }
 
-/** True when the tool captures a live URL (url-shot) — routed straight to Chromium. */
+/** True when the tool captures a live URL (url-shot) - routed straight to Chromium. */
 export function isCaptureTool(manifest: Manifest): boolean {
   return ((manifest as { capabilities?: string[] }).capabilities ?? []).includes('capture');
 }
 
 /** True when the tool is a file-in/file-out transform utility (strip-data, compress-pdf)
- *  — its output is a FILE via the exportFile hook, not a render. */
+ * - its output is a FILE via the exportFile hook, not a render. */
 export function isTransform(manifest: Manifest): boolean {
   return Boolean((manifest as { hooks?: { exportFile?: unknown } }).hooks?.exportFile);
 }
@@ -91,7 +91,7 @@ function canvasOf(dom: JSDOM): HTMLElement {
 /**
  * Render the runtime's CURRENT state to an SVG string, or null when this tool can't
  * produce SVG in a pure-Node shell (HTML-layout tools need a browser engine). Used
- * for the terminal image preview — resvg rasterises the returned SVG.
+ * for the terminal image preview - resvg rasterises the returned SVG.
  */
 export async function renderSvg(runtime: Runtime, dom: JSDOM): Promise<string | null> {
   try {
@@ -114,7 +114,7 @@ export interface ExportDims extends RenderDims { c2paDays?: number }
  * Export the current state to `outPath` in `format`, honouring optional output
  * dimensions. Supports whatever the Node bridge produces (text/data + svg/emf/eps,
  * plus transform-hook utilities); raster/pdf throw a clear message (they need a browser
- * engine — the desktop app). Returns the number of bytes written.
+ * engine - the desktop app). Returns the number of bytes written.
  */
 export async function exportToFile(
   runtime: Runtime, dom: JSDOM, manifest: Manifest, format: string, outPath: string, dims: ExportDims = {},
@@ -122,7 +122,7 @@ export async function exportToFile(
   await mkdir(dirname(outPath), { recursive: true });   // ensure the target folder exists
   const fmt = format.toLowerCase();
   // Print prep that cannot be applied is a refusal, not a shrug (same guard the CLI runs in
-  // run.ts). Only pdf/pdf-cmyk/cmyk-tiff carry a bleed box or crop marks — nothing draws them
+  // run.ts). Only pdf/pdf-cmyk/cmyk-tiff carry a bleed box or crop marks - nothing draws them
   // onto a PNG/SVG/EPS on any tier, and the Tier-B browser's renderRaster ignores them too, so
   // a png+bleed/marks link would otherwise write a file byte-identical to one without them,
   // exit 0, with nothing to say so. Refuse by name instead. Shared message, no drift vs the CLI.
@@ -131,7 +131,7 @@ export async function exportToFile(
   }
   const transform = isTransform(manifest);
   const write = async (bytes: Uint8Array, viaWebShell = false): Promise<number> => {
-    // Optionally stamp Content Credentials (C2PA) as the LAST byte operation — same rule
+    // Optionally stamp Content Credentials (C2PA) as the LAST byte operation - same rule
     // as the CLI/web. NEVER on transform utilities (strip-data's whole job is to REMOVE
     // metadata). Ephemeral on-device cert; a clean warn-and-continue on any failure.
     // The Tier-B (web shell) branch already stamped via the forwarded ?c2pa param, so it
@@ -142,7 +142,7 @@ export async function exportToFile(
         // Match the web/CLI tools.lolly.export enrichment: context + date + output
         // size + the scalar-input digest, so a TUI-made asset inspects as richly.
         // buildExportC2paOpts (shared with the CLI) also attaches the profile author
-        // under the `useDetails` opt-in — same gate as every other shell.
+        // under the `useDetails` opt-in - same gate as every other shell.
         const profile = (await getProfile()) as Profile;
         out = await embedC2pa(bytes, fmt, buildExportC2paOpts({
           surface: 'tui',
@@ -150,7 +150,7 @@ export async function exportToFile(
           model: runtime.getModel(),
           format: fmt, dims, days: dims.c2paDays, profile,
         }));
-      } catch { /* non-fatal — write the unstamped bytes */ }
+      } catch { /* non-fatal - write the unstamped bytes */ }
     }
     const buf = Buffer.from(out);
     await writeFile(outPath, buf);
@@ -169,7 +169,7 @@ export async function exportToFile(
   }
 
   // 2. Capture tools (url-shot): drive Chromium straight at the target URL. Produces
-  //    png/jpg/pdf(vector)/svg directly — never touches the DOM export path.
+  //    png/jpg/pdf(vector)/svg directly - never touches the DOM export path.
   if (isCaptureTool(manifest)) {
     const { captureUrl, captureParamsFrom } = await import('./url-capture.ts');
     const params = captureParamsFrom(runtime.getModel() as Array<{ id: string; value: unknown }>);
@@ -191,13 +191,13 @@ export async function exportToFile(
     if (u !== 'px' && dims.dpi) opts.dpi = dims.dpi;
     const blob = await runtime.export(canvas, fmt, opts);
     const bytes = new Uint8Array(await blob.arrayBuffer());
-    // Fail loud: this is the runtime's own DOM-free output — refuse to write a file the
+    // Fail loud: this is the runtime's own DOM-free output - refuse to write a file the
     // render silently failed to produce (a swallowed onInit) rather than report success.
     assertRenderOk({ hookErrors: runtime.hookErrors, format: fmt, bytes });
     return write(bytes);
   }
 
-  // 3b. PNG from an SVG-native tool: rasterise the engine's own SVG via resvg — no
+  // 3b. PNG from an SVG-native tool: rasterise the engine's own SVG via resvg - no
   //     browser and no built web shell needed (the fast, always-available raster path,
   //     mirroring the MCP server's Tier A+resvg). resvg emits PNG only; jpg/webp/pdf
   //     fall through to the web-shell tier below. The Imprint is embedded HERE too, in
@@ -212,7 +212,7 @@ export async function exportToFile(
       // and the physical-unit DPI carried onto both the imprinted and plain paths.
       const { bytes: png } = await rasterizeTierAPng(svg, dims, manifest as { render?: { width?: number; height?: number } });
       // Tier A rasterises the runtime's own SVG, so a swallowed hook failure yields a
-      // blank PNG — gate it (the hookErrors signal catches what a byte-count can't).
+      // blank PNG - gate it (the hookErrors signal catches what a byte-count can't).
       assertRenderOk({ hookErrors: runtime.hookErrors, format: fmt, bytes: png });
       return write(png);
     }

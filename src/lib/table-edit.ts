@@ -5,7 +5,7 @@
  * A `table` value is user DATA in both dimensions (columns AND rows are the user's, unlike
  * `blocks`, whose fields are declared in the manifest), so the terminal editor is a real
  * grid rather than a field list: row -1 addresses the HEADING row, rows >= 0 the body.
- * Every mutator returns a NEW rectangular TableValue — the engine's updateInput rejects a
+ * Every mutator returns a NEW rectangular TableValue - the engine's updateInput rejects a
  * ragged grid outright, so keeping rows padded here is the difference between an edit
  * landing and an edit silently doing nothing.
  *
@@ -126,7 +126,7 @@ export function columnWidths(t: TableValue, avail: number, maxCell = 24): number
   if (!widths.length) return widths;
   const gap = 1;
   let total = widths.reduce((a, b) => a + b, 0) + gap * (widths.length - 1);
-  // Shave the widest column repeatedly rather than scaling — narrow columns stay legible.
+  // Shave the widest column repeatedly rather than scaling - narrow columns stay legible.
   while (total > avail) {
     const widest = widths.indexOf(Math.max(...widths));
     if (widths[widest]! <= 3) break;

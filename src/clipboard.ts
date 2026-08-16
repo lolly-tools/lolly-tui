@@ -4,7 +4,7 @@
  * (a headless render has nowhere to paste), but an INTERACTIVE session does: when someone
  * copies a colour value or a de-identified map out of a live utility, it should land on
  * the real OS clipboard. Shells out to the platform tool (pbcopy / clip / wl-copy / xclip
- * / xsel) — no dependency, and a clean `false` when none is present rather than a throw.
+ * / xsel) - no dependency, and a clean `false` when none is present rather than a throw.
  */
 import { spawn } from 'node:child_process';
 

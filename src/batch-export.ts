@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * Folder export — render every saved session in a folder subtree to a file and pack the
+ * Folder export - render every saved session in a folder subtree to a file and pack the
  * whole tree into ONE zip on the user's Desktop.
  *
  * Formats: svg/emf/eps and the data formats render DOM-free in pure Node; raster/pdf/
  * video render via the scoped Chromium tier once `lolly install-browser` has run (the
- * same Tier-B path a single ToolView export uses — exportToFile routes per format).
+ * same Tier-B path a single ToolView export uses - exportToFile routes per format).
  * When a row's format needs the browser tier and it isn't installed, the row falls back
  * to HTML and SAYS so (BatchMember.note, surfaced in the progress log and the zip's
  * lolly.txt) rather than failing the batch or degrading silently. The ZIP itself can be
@@ -65,7 +65,7 @@ export interface ExportFolderResult {
   members: BatchMember[]; // every attempted session (ok + skipped), in render order
 }
 
-// Already-compressed payloads gain nothing from deflate; store them (method 0) — Tier-B
+// Already-compressed payloads gain nothing from deflate; store them (method 0) - Tier-B
 // members (png/jpg/pdf/video) are already compressed bytes. Mirrors pro/zip.ts.
 const STORE_EXT = new Set(['png', 'jpg', 'jpeg', 'webp', 'avif', 'gif', 'pdf', 'webm', 'mp4']);
 const extOf = (name: string): string => {
@@ -170,7 +170,7 @@ export async function exportFolder(
   const total = resolved.length;
   if (total === 0) throw new Error('Nothing to export — this folder has no saved sessions.');
 
-  // 4. Stage dir — one shared jsdom #canvas means renders MUST stay sequential.
+  // 4. Stage dir - one shared jsdom #canvas means renders MUST stay sequential.
   const stage = await mkdtemp(join(tmpdir(), 'lolly-batch-'));
   const members: BatchMember[] = [];
   const usedByDir = new Map<string, Set<string>>(); // relDir → base names taken (dedup)
@@ -184,7 +184,7 @@ export async function exportFolder(
       const session = byslot.get(ref);
       if (!session) {
         // A planned ref with no session (deleted between plan + resolve). Skipped, still
-        // counted against `total`? No — total counts only resolved; report but don't tick.
+        // counted against `total`? No - total counts only resolved; report but don't tick.
         continue;
       }
       const label = session.label || session.toolId;
@@ -218,7 +218,7 @@ export async function exportFolder(
 }
 
 /** Pack the staged member files (+ a lolly.txt manifest) into one zip and write it. The
- *  shared tail of every batch — folder export, a CSV batch, and a saved-session set. */
+ *  shared tail of every batch - folder export, a CSV batch, and a saved-session set. */
 async function packMembersToZip(
   stage: string,
   members: BatchMember[],
@@ -263,7 +263,7 @@ async function packMembersToZip(
 
 /**
  * When a render fails for a reason HTML can still satisfy, the batch falls back rather
- * than skipping the row — but must SAY so. Returns the per-row note (surfaced in the
+ * than skipping the row - but must SAY so. Returns the per-row note (surfaced in the
  * progress log and the zip's lolly.txt), or null when the failure is real and the row
  * should skip. Two honest cases: the format needs the browser tier and it isn't
  * installed, or the tool is HTML-layout with no <svg> for a vector format.
@@ -278,7 +278,7 @@ function htmlFallbackNote(msg: string): string | null {
 
 /**
  * Render ONE session into `stage/<relNoExt>.<fmt>`, with the same html fallback as
- * ToolView.doExport. Never throws — a failure returns a skipped BatchMember so the batch
+ * ToolView.doExport. Never throws - a failure returns a skipped BatchMember so the batch
  * continues.
  */
 async function renderSessionTo(
@@ -295,7 +295,7 @@ async function renderSessionTo(
     const { runtime, manifest } = await mountTool(session.toolId, host, session.query);
     const avail = exportableFormats(manifest);
     const fmt = avail.includes(want) ? want : (avail[0] ?? 'html');
-    // A batch-wide format won't exist on every tool — substitute, but say so per-row.
+    // A batch-wide format won't exist on every tool - substitute, but say so per-row.
     const substituted = fmt !== want ? `${want} not offered by this tool — rendered ${fmt}` : undefined;
     const zipPath = `${relNoExt}.${fmt}`;
     try {
@@ -304,7 +304,7 @@ async function renderSessionTo(
       return { slot: session.slot, label, zipPath, format: fmt, bytes, ok: true, note: substituted };
     } catch (e) {
       // For a BULK export, fall back to HTML (always renderable) so every member still
-      // produces a file rather than failing — but carry the honest reason per-row;
+      // produces a file rather than failing - but carry the honest reason per-row;
       // interactive doExport surfaces the actionable "run install:browser" message instead.
       const note = fmt !== 'html' ? htmlFallbackNote((e as Error).message) : null;
       if (note) {
@@ -333,7 +333,7 @@ export interface BatchRunOpts {
 }
 
 /**
- * CSV/data batch — render an array of BatchRow (engine parseBatchCsv output) to one zip.
+ * CSV/data batch - render an array of BatchRow (engine parseBatchCsv output) to one zip.
  * The "TUI way" of a data-driven batch: each row is a tool + params + optional per-row
  * format/size, rendered through the SAME engine path as a single export and packed like a
  * folder export. Zip-to-Desktop is the TUI idiom (the CLI writes a directory instead).
@@ -396,7 +396,7 @@ async function renderRowTo(
 }
 
 /**
- * Saved-session multiselect — render an ad-hoc set of ticked sessions (across folders)
+ * Saved-session multiselect - render an ad-hoc set of ticked sessions (across folders)
  * to one zip. Same packaging as a folder export; the difference is the source is a
  * hand-picked list rather than a folder subtree.
  */
