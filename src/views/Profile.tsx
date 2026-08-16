@@ -138,7 +138,7 @@ export function Profile({ bridge, onNav, onQuit }: { bridge: TuiBridge; onNav: (
   // ladder (resolveVerdict) the web /valid view and `lolly validate` render, shown as a
   // full report panel: headline, claim facts, per-check list, then the deep pixel scan.
   // Trust policy matches the CLI validator: the Lolly CA root (includeLollyRoot: true,
-  // per plans/cli-ga-contract.md §12 O1 — a Lolly-CA-signed export now reads the same
+  // per plans/cli-ga-contract.md section 12 O1 — a Lolly-CA-signed export now reads the same
   // here as on the web /valid view) PLUS the vendored C2PA list PLUS every root the user
   // pinned (LOLLY_TRUST_ANCHOR / the profile's Trust anchors field — the terminal's
   // stand-in for --trust-anchor, see trust-anchors.ts). The anchor set is printed in the

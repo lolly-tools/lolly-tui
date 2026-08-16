@@ -13,7 +13,7 @@ import type { BlockRow } from './block-tree.ts';
 
 test('slugRef lowercases, collapses non-alphanumerics and trims hyphens', () => {
   assert.equal(slugRef('  Hello, World!  '), 'hello-world');
-  assert.equal(slugRef('A—B'), 'a-b');
+  assert.equal(slugRef('A-B'), 'a-b');
   assert.equal(slugRef(''), '');
   assert.equal(slugRef(undefined), '');
   assert.equal(slugRef(42), '42');

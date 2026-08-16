@@ -24,7 +24,7 @@ export const QUIPS: readonly string[] = [
   'Aligning things to the pixel…',
   'Sweeping up leftover whitespace…',
   'Giving the layout one last look…',
-  'Almost there — buffing the edges…',
+  'Almost there - buffing the edges…',
 ];
 
 /** Deterministic rotation by tick index - `QUIPS[i % QUIPS.length]`. Progress.tsx bumps

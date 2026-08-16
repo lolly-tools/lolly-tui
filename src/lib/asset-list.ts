@@ -28,7 +28,7 @@ export function assetEmoji(type?: string): string {
 
 /** First declared format string, e.g. "svg" / "png" / "json". */
 export function assetFormat(a: AssetRow): string {
-  return a.formats?.[0]?.format ?? '—';
+  return a.formats?.[0]?.format ?? '-';
 }
 
 /** Human byte size of the first format (e.g. "4.2 KB"). */

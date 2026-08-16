@@ -17,7 +17,7 @@
  * pinned; the two lists are concatenated and de-duplicated.
  *
  * Policy note, deliberately identical to the CLI: the Lolly CA root IS pinned
- * (includeLollyRoot: true) as of plans/73-cli-ga-contract.md §12 O1 (Andy, 2026-08-01), so a
+ * (includeLollyRoot: true) as of plans/73-cli-ga-contract.md section 12 O1 (Andy, 2026-08-01), so a
  * Lolly-CA-signed export reads the same here as it does on the web /valid view. It used
  * to be excluded on both terminal surfaces, which made "Verified" mean one thing in the
  * browser and another in the terminal. The TUI has no argv, so there is no
@@ -149,7 +149,7 @@ export function describeAnchors(r: ResolvedAnchors): Array<{ text: string; warn:
     });
   }
   for (const f of r.failed) {
-    out.push({ text: `  ! Trust anchor not loaded: ${f.path} (${f.from}) — ${f.reason}`, warn: true });
+    out.push({ text: `  ! Trust anchor not loaded: ${f.path} (${f.from}) - ${f.reason}`, warn: true });
   }
   return out;
 }

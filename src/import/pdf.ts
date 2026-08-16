@@ -30,7 +30,7 @@ export async function parsePdfBytes(bytes: Uint8Array, warn: (m: string) => void
   try {
     doc = await PDFDocument.load(bytes, { ignoreEncryption: true, throwOnInvalidObject: false, updateMetadata: false });
   } catch (err) {
-    throw new Error('Couldn’t read this PDF/.ai — it may be encrypted or damaged. (' + msg(err) + ')');
+    throw new Error('Couldn’t read this PDF/.ai - it may be encrypted or damaged. (' + msg(err) + ')');
   }
   const pageCount = doc.getPageCount();
   if (!pageCount) throw new Error('This PDF has no pages.');

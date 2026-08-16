@@ -102,7 +102,7 @@ function manifestText(zipName: string, folderName: string, members: BatchMember[
     'Rendered in the terminal. svg/emf/eps and data formats render natively;',
     'png/jpg/pdf/video use the scoped browser tier (one-time `lolly install-browser`).',
     ...(degraded ? [
-      'Rows marked ⚠ degraded — each note says why; a missing browser tier falls',
+      'Rows marked ⚠ degraded - each note says why; a missing browser tier falls',
       'back to HTML.',
     ] : []),
     'A password locks the ZIP itself.',
@@ -168,7 +168,7 @@ export async function exportFolder(
   const byslot = new Map<string, SavedSession>((await listSessions()).map(s => [s.slot, s]));
   const resolved = planned.filter(p => byslot.has(p.ref));
   const total = resolved.length;
-  if (total === 0) throw new Error('Nothing to export — this folder has no saved sessions.');
+  if (total === 0) throw new Error('Nothing to export - this folder has no saved sessions.');
 
   // 4. Stage dir - one shared jsdom #canvas means renders MUST stay sequential.
   const stage = await mkdtemp(join(tmpdir(), 'lolly-batch-'));
@@ -270,9 +270,9 @@ async function packMembersToZip(
  */
 function htmlFallbackNote(msg: string): string | null {
   if (/install[ :-]browser|browser engine|Chromium|build:web|web shell/i.test(msg))
-    return 'html fallback — run lolly install-browser for png/pdf';
+    return 'html fallback - run lolly install-browser for png/pdf';
   if (/<svg>|requires an/i.test(msg))
-    return 'html fallback — this tool has no vector output';
+    return 'html fallback - this tool has no vector output';
   return null;
 }
 
@@ -296,7 +296,7 @@ async function renderSessionTo(
     const avail = exportableFormats(manifest);
     const fmt = avail.includes(want) ? want : (avail[0] ?? 'html');
     // A batch-wide format won't exist on every tool - substitute, but say so per-row.
-    const substituted = fmt !== want ? `${want} not offered by this tool — rendered ${fmt}` : undefined;
+    const substituted = fmt !== want ? `${want} not offered by this tool - rendered ${fmt}` : undefined;
     const zipPath = `${relNoExt}.${fmt}`;
     try {
       const bytes = await exportToFile(runtime, dom, manifest, fmt, join(stage, zipPath), dims);
@@ -376,7 +376,7 @@ async function renderRowTo(
     const { runtime, manifest } = await mountTool(row.toolId, host, query);
     const avail = exportableFormats(manifest);
     const fmt = avail.includes(want) ? want : (avail[0] ?? 'html');
-    const substituted = fmt !== want ? `${want} not offered by this tool — rendered ${fmt}` : undefined;
+    const substituted = fmt !== want ? `${want} not offered by this tool - rendered ${fmt}` : undefined;
     const zipPath = `${relNoExt}.${fmt}`;
     try {
       const bytes = await exportToFile(runtime, dom, manifest, fmt, join(stage, zipPath), dims);

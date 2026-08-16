@@ -31,10 +31,10 @@ export function asTable(v: unknown): TableValue {
 /** One-line readout for the inputs list: shape first, then the headings that fit. */
 export function tableSummary(v: unknown): string {
   const t = asTable(v);
-  if (!t.columns.length) return 'empty — ⏎ to edit · i import CSV/TSV';
+  if (!t.columns.length) return 'empty - ⏎ to edit · i import CSV/TSV';
   const heads = t.columns.filter(Boolean).join(', ');
   const shape = `${t.columns.length} col${t.columns.length === 1 ? '' : 's'} × ${t.rows.length} row${t.rows.length === 1 ? '' : 's'}`;
-  return `${shape}${heads ? ` · ${heads}` : ''} — ⏎ to edit · i import`;
+  return `${shape}${heads ? ` · ${heads}` : ''} - ⏎ to edit · i import`;
 }
 
 /** Cell text at (row, col); row -1 = the heading row. '' when out of range. */

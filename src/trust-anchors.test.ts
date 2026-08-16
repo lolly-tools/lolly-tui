@@ -32,7 +32,7 @@ await writeFile(empty, '-----BEGIN CERTIFICATE-----\n-----END CERTIFICATE-----\n
 const VENDORED = defaultTrustAnchors({ includeLollyRoot: false }).length;
 // The built-in set this shell actually verifies against: the vendored C2PA
 // known-certificate list PLUS the Lolly CA root, pinned on every surface as of
-// plans/73-cli-ga-contract.md §12 O1 (Andy, 2026-08-01).
+// plans/73-cli-ga-contract.md section 12 O1 (Andy, 2026-08-01).
 const BUILTIN = VENDORED + 1;
 
 test('anchorPaths reads the env var as a PATH-style list', () => {
@@ -71,7 +71,7 @@ test('with nothing pinned the anchor set is the vendored C2PA list plus the Loll
   assert.deepEqual(r.failed, []);
 });
 
-test('the Lolly CA root IS pinned here, matching the CLI validator (contract §12 O1)', async () => {
+test('the Lolly CA root IS pinned here, matching the CLI validator (contract section 12 O1)', async () => {
   // It used to be excluded on both terminal surfaces, so a Lolly-CA-signed export read
   // "Verified" in the browser and plain "Credential intact" here. One word, one meaning.
   const r = await loadTrustAnchors(undefined, {});
