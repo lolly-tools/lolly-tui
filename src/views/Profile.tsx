@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * Profile — your details, persisted on disk (store.ts). They pre-fill tools that
+ * Profile - your details, persisted on disk (store.ts). They pre-fill tools that
  * declare bindToProfile and, with "embed in exports" on, ride along in export
  * provenance. Edits save immediately.
  */
@@ -34,7 +34,7 @@ interface VReport { path: string; lines: VLine[] }
 
 const V_TONE_COLOR = { good: theme.accentName, warn: theme.warn, bad: theme.danger, dim: theme.dim, fg: theme.fg } as const;
 
-// Every claim/signer string is attacker-controlled bytes from the file being checked —
+// Every claim/signer string is attacker-controlled bytes from the file being checked -
 // strip control chars (incl. ESC) so a crafted manifest can't inject terminal sequences
 // or shred the Ink layout. THE scrub is defined once in node-shell/verdict-report and
 // shared with the CLI validator and MCP; this is the local alias.
@@ -48,7 +48,7 @@ const FIELDS: Field[] = [
   { key: 'phone', label: 'Phone', type: 'text' },
   { key: 'company', label: 'Company', type: 'text' },
   { key: 'useDetails', label: 'Embed my details in exports', type: 'bool' },
-  // Pinned CA roots for `v` (verify) — the terminal's stand-in for the CLI's repeatable
+  // Pinned CA roots for `v` (verify) - the terminal's stand-in for the CLI's repeatable
   // --trust-anchor flag, since the TUI has no argv. PATH-style list of PEM paths.
   { key: 'trustAnchors', label: 'Trust anchors (PEM paths, : separated)', type: 'text' },
 ];
@@ -60,13 +60,13 @@ export function Profile({ bridge, onNav, onQuit }: { bridge: TuiBridge; onNav: (
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [status, setStatus] = useState('');
-  const [verifying, setVerifying] = useState(false);   // 'v' — check a file's Content Credentials
+  const [verifying, setVerifying] = useState(false);   // 'v' - check a file's Content Credentials
   const [vdraft, setVdraft] = useState('');
-  const [prog, setProg] = useState<Prog | null>(null); // 'b' — back up + render every project (live)
+  const [prog, setProg] = useState<Prog | null>(null); // 'b' - back up + render every project (live)
   const [vreport, setVreport] = useState<VReport | null>(null);   // the full verify report panel
   const [vscroll, setVscroll] = useState(0);
   // Report window height: Tabs(1) + panel borders(2) + the Panel's own title row(1) +
-  // footer(1) around the line list — get this wrong by one and Yoga silently collapses
+  // footer(1) around the line list - get this wrong by one and Yoga silently collapses
   // the first line (the headline) instead of clipping the last.
   const vInnerH = Math.max(4, rows - 6);
 
@@ -79,7 +79,7 @@ export function Profile({ bridge, onNav, onQuit }: { bridge: TuiBridge; onNav: (
 
   useInput((input, key) => {
     if (!profile) return;
-    // While rendering everything, the Progress panel owns the screen — only dismiss it once done.
+    // While rendering everything, the Progress panel owns the screen - only dismiss it once done.
     if (prog) { if (prog.finished && (key.return || key.escape || input.length > 0)) setProg(null); return; }
     // The verify report owns the screen: j/k scroll, esc/⏎/q close.
     if (vreport) {
@@ -110,16 +110,16 @@ export function Profile({ bridge, onNav, onQuit }: { bridge: TuiBridge; onNav: (
     if (f && profile) persist({ ...profile, [f.key]: raw });
   }
   // Back up my data AND render everything: the portable JSON backup (quick), then a
-  // rendered zip of EVERY saved session to its output file — the terminal twin of the web
+  // rendered zip of EVERY saved session to its output file - the terminal twin of the web
   // "Export my data & render everything" button. Heavy but explicit; a live Progress panel
   // shows each render as it lands. (Node renders svg/text + html fallback; raster/pdf/video
-  // go through the bundled web shell where available — see engine-render.)
+  // go through the bundled web shell where available - see engine-render.)
   function renderEverything(): void {
     setStatus('');
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
     void (async () => {
       const sessions = await listSessions();
-      if (!sessions.length) { setStatus('No saved projects to render yet — make something first.'); return; }
+      if (!sessions.length) { setStatus('No saved projects to render yet - make something first.'); return; }
       setProg({ done: 0, total: sessions.length, log: ['Backing up your data…'], finished: false });
       let backupNote = '';
       try { const r = await backupData(stamp); backupNote = `data backup → ${r.path}`; } catch (e) { backupNote = 'data backup failed: ' + (e as Error).message; }
@@ -134,13 +134,13 @@ export function Profile({ bridge, onNav, onQuit }: { bridge: TuiBridge; onNav: (
         .catch(e => setProg(p => ({ done: p?.done ?? 0, total: p?.total ?? 0, log: p?.log ?? [], finished: true, note: `✗ ${(e as Error).message}` })));
     })();
   }
-  // Verify a file's Content Credentials — the same engine verifier + shared verdict
+  // Verify a file's Content Credentials - the same engine verifier + shared verdict
   // ladder (resolveVerdict) the web /valid view and `lolly validate` render, shown as a
   // full report panel: headline, claim facts, per-check list, then the deep pixel scan.
   // Trust policy matches the CLI validator: the Lolly CA root (includeLollyRoot: true,
-  // per plans/cli-ga-contract.md section 12 O1 — a Lolly-CA-signed export now reads the same
+  // per plans/cli-ga-contract.md section 12 O1 - a Lolly-CA-signed export now reads the same
   // here as on the web /valid view) PLUS the vendored C2PA list PLUS every root the user
-  // pinned (LOLLY_TRUST_ANCHOR / the profile's Trust anchors field — the terminal's
+  // pinned (LOLLY_TRUST_ANCHOR / the profile's Trust anchors field - the terminal's
   // stand-in for --trust-anchor, see trust-anchors.ts). The anchor set is printed in the
   // report, so an untrusted verdict is never unexplained.
   function doVerify(path: string): void {
@@ -158,11 +158,11 @@ export function Profile({ bridge, onNav, onQuit }: { bridge: TuiBridge; onNav: (
         const push = (text: string, tone: VLine['tone'] = 'fg'): void => { lines.push({ text, tone }); };
         // Headline + facts + checks all come from the SHARED node-shell renderer
         // (verdict-report.ts), so this panel and `lolly validate` can never again
-        // print different words for the same verdict — the drift that started this
+        // print different words for the same verdict - the drift that started this
         // collapse. The two terminal quirks (parts elevated to a headline; no
         // separate "Verified" line) live in the shared renderer via elevateParts.
         const h = verdictHeadline(v, { elevateParts: true });
-        push(h.detail ? `${h.glyph} ${h.name} — ${h.detail}` : `${h.glyph} ${h.name}`, h.tone);
+        push(h.detail ? `${h.glyph} ${h.name} - ${h.detail}` : `${h.glyph} ${h.name}`, h.tone);
         if (report.reason && report.state !== 'invalid') push(`  ${vclean(report.reason)}`, 'dim');
         if (report.claim) {
           push(report.trusted
@@ -173,7 +173,7 @@ export function Profile({ bridge, onNav, onQuit }: { bridge: TuiBridge; onNav: (
         for (const chk of verdictChecks(report)) {
           const tone = chk.mark === 'ok' ? 'good' : chk.mark === 'info' ? 'dim' : 'bad';
           const mark = chk.mark === 'ok' ? '✓' : chk.mark === 'info' ? 'ℹ' : '✕';
-          push(`  ${mark} ${chk.code} — ${chk.explanation}`, tone);
+          push(`  ${mark} ${chk.code} - ${chk.explanation}`, tone);
         }
         // Which anchor set produced that trust line. Without this a user cannot tell an
         // untrusted-by-design verdict from a mis-pinned root.
@@ -181,13 +181,13 @@ export function Profile({ bridge, onNav, onQuit }: { bridge: TuiBridge; onNav: (
         setVscroll(0);
         setVreport({ path: abs, lines });
         setStatus('');
-        // Deep pixel scan (progressive enhancement — needs the Tier-B browser + built
+        // Deep pixel scan (progressive enhancement - needs the Tier-B browser + built
         // dist): the /valid view's own neural decode for Lolly's ?durable=1 mark and
         // foreign TrustMark / Content Seal watermarks. Metadata can be stripped; the
         // durable mark is what still identifies a Lolly export afterwards.
         let appended = false;
         // Replace this report's LAST line, only while it's still the open report. The
-        // RESULT lands at the tail, usually below the fold — follow it then (and only
+        // RESULT lands at the tail, usually below the fold - follow it then (and only
         // then: yanking the view for the interim "running…" line would hide the headline
         // the user is reading during the ~minute the scan takes).
         const swapTail = (line: VLine): void => {
@@ -202,12 +202,12 @@ export function Profile({ bridge, onNav, onQuit }: { bridge: TuiBridge; onNav: (
           const { deepScanViaWebShell } = await import('@lolly-tools/node-shell/webshell-render');
           const d = (await deepScanViaWebShell([abs]))[0];
           swapTail(!d?.scanned ? { text: '○ Deep scan: this file type can’t be pixel-scanned', tone: 'dim' }
-            : d.lollyDurable ? { text: '✦ Lolly durable mark decoded from the pixels — survives metadata stripping and re-encoding', tone: 'good' }
-            : d.trustmark ? { text: '~ Adobe TrustMark watermark decoded — embedded by another TrustMark-aware tool', tone: 'warn' }
+            : d.lollyDurable ? { text: '✦ Lolly durable mark decoded from the pixels - survives metadata stripping and re-encoding', tone: 'good' }
+            : d.trustmark ? { text: '~ Adobe TrustMark watermark decoded - embedded by another TrustMark-aware tool', tone: 'warn' }
             : d.contentSeal ? { text: '~ Meta Content Seal watermark decoded', tone: 'warn' }
             : { text: '○ Deep scan: no pixel watermark decoded (not proof of absence)', tone: 'dim' });
         } catch (e) {
-          swapTail({ text: `! Deep scan unavailable — ${vclean((e as Error).message)}`, tone: 'warn' });
+          swapTail({ text: `! Deep scan unavailable - ${vclean((e as Error).message)}`, tone: 'warn' });
         }
       } catch (e) { setStatus('Verify failed: ' + (e as Error).message); }
     })();
@@ -227,7 +227,7 @@ export function Profile({ bridge, onNav, onQuit }: { bridge: TuiBridge; onNav: (
           width={cols} height={Math.max(6, rows - 3)}
           active finished={prog.finished} note={prog.note}
         />
-        <Footer shortcuts={prog.finished ? [{ key: '⏎', label: 'close' }] : [{ key: '…', label: 'rendering every project — keep the terminal open' }]} />
+        <Footer shortcuts={prog.finished ? [{ key: '⏎', label: 'close' }] : [{ key: '…', label: 'rendering every project - keep the terminal open' }]} />
       </Box>
     );
   }
@@ -241,7 +241,7 @@ export function Profile({ bridge, onNav, onQuit }: { bridge: TuiBridge; onNav: (
       <Box flexDirection="column" width={cols} height={rows}>
         <Tabs active="profile" />
         <Panel
-          title={`Content Credentials — ${basename(vreport.path)}${more ? ` (${vscroll + 1}–${Math.min(vscroll + vInnerH, vreport.lines.length)}/${vreport.lines.length})` : ''}`}
+          title={`Content Credentials - ${basename(vreport.path)}${more ? ` (${vscroll + 1}–${Math.min(vscroll + vInnerH, vreport.lines.length)}/${vreport.lines.length})` : ''}`}
           width={cols} height={Math.max(6, rows - 3)} active
         >
           {win.map((l, i) => <Text key={vscroll + i} color={V_TONE_COLOR[l.tone]} wrap="truncate-end">{l.text}</Text>)}
@@ -275,7 +275,7 @@ export function Profile({ bridge, onNav, onQuit }: { bridge: TuiBridge; onNav: (
               <Box width={32}><Text color={active ? theme.accentName : undefined} wrap="truncate-end">{active ? '▸ ' : '  '}{f.label}</Text></Box>
               {active && editing && f.type === 'text'
                 ? <Box><Text color={theme.accentName}>› </Text><TextInput value={draft} onChange={setDraft} onSubmit={commit} /></Box>
-                : <Text color={active ? theme.fg : theme.dim} wrap="truncate-end">{f.type === 'bool' ? (val ? '[x] on' : '[ ] off') : (String(val ?? '') || '—')}</Text>}
+                : <Text color={active ? theme.fg : theme.dim} wrap="truncate-end">{f.type === 'bool' ? (val ? '[x] on' : '[ ] off') : (String(val ?? '') || '-')}</Text>}
             </Box>
           );
         })}

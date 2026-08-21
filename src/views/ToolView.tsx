@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * Tool view — a full-screen HARD-PANEL dashboard (web UI's sidebar + cards): an
+ * Tool view - a full-screen HARD-PANEL dashboard (web UI's sidebar + cards): an
  * "Inputs" panel beside an "Export settings" panel and a "Preview" panel. TAB moves
  * focus between the Inputs and Export panels; the focused panel is highlighted and
  * takes j/k + edit. Every panel has an explicit width/height so nothing shakes.
  *
  * Export settings (edit like inputs): format · width · height · unit · filename ·
- * folder — the same knobs as the web export dialog. Keys: Tab switch panel · j/k move ·
+ * folder - the same knobs as the web export dialog. Keys: Tab switch panel · j/k move ·
  * Enter/e edit · ←/→ cycle (format/unit/select) · space toggle boolean · x export ·
  * s save project · p preview · esc back.
  *
@@ -18,7 +18,7 @@
  * editor-layout tool's box TEXT editable (its `boxes` blocks input carries `text`).
  * All rendered inside the SAME fixed-size Inputs panel, so nothing shakes.
  *
- * A `table` input (engine 1.78 — battlecards, any spreadsheet-shaped tool) is enterable
+ * A `table` input (engine 1.78 - battlecards, any spreadsheet-shaped tool) is enterable
  * the same way, but as a real GRID rather than a field list: Enter drills into the cells
  * (h/j/k/l or arrows move, row -1 is the heading row), Enter/e edits a cell, a/A add a
  * row/column, d/D delete one, i imports a CSV/TSV/Markdown file (the engine's
@@ -75,7 +75,7 @@ interface ModelItem {
   addMenu?: { field: string; label?: string };
   canvas?: Record<string, unknown>;
   labelledFields?: boolean;
-  // number-input bounds — drive the ←/→ slider (see NUMBER handling below).
+  // number-input bounds - drive the ←/→ slider (see NUMBER handling below).
   min?: number;
   max?: number;
   step?: number;
@@ -93,10 +93,10 @@ type TableNav = { row: number; col: number };
 const TEXTUAL = new Set(['text', 'longtext', 'url', 'number', 'color', 'date', 'time', 'datetime-local']);
 const FIELD_TEXTUAL = new Set(['text', 'longtext', 'url', 'number', 'color']);
 // Path-style inputs edited by typing a filesystem path (file) or an asset id / lolly.tools
-// URL (asset). Not plain text — commit() resolves them (load bytes / resolve the ref).
+// URL (asset). Not plain text - commit() resolves them (load bytes / resolve the ref).
 const EDITABLE_PATH = new Set(['file', 'asset']);
 
-/** Best-effort MIME from an extension — mirrors the CLI's file-input loader. */
+/** Best-effort MIME from an extension - mirrors the CLI's file-input loader. */
 function mimeForFile(path: string): string {
   switch (extname(path).toLowerCase()) {
     case '.jpg': case '.jpeg': return 'image/jpeg';
@@ -120,7 +120,7 @@ const UNITS = ['px', 'mm', 'cm', 'in', 'pt'];
 // Content Credentials (C2PA) validity choices; 0 = off. Stamped into the export as its
 // last byte-operation (svg/raster/pdf that have a C2PA container).
 const C2PA_DAYS = [0, 7, 30, 90, 365];
-// Raster formats the durable (neural TrustMark) credential can ride in — mirrors the
+// Raster formats the durable (neural TrustMark) credential can ride in - mirrors the
 // web shell's isDurableFmt (views/tool-actions.ts). The embed itself runs in the web
 // shell's export path, so a durable export always routes via the Tier-B browser.
 const DURABLE_FMTS = ['png', 'jpg', 'jpeg', 'webp', 'avif', 'tiff'];
@@ -144,7 +144,7 @@ const EXPORT_FIELDS: Array<{ key: ExportKey; label: string; kind: 'cycle' | 'tex
  *  an unrecognised bucket both fall to the 30-day default; an explicit off → 0.
  *
  *  ABSENT is not off: `null` is the "nobody said" case, and the answer to that is the
- *  engine's one policy (c2paDefaultOn — render.c2pa:false and privacy:'on-device' opt a
+ *  engine's one policy (c2paDefaultOn - render.c2pa:false and privacy:'on-device' opt a
  *  tool out), the same call the web shell and the CLI make. Read from the manifest here
  *  rather than re-derived, so the three surfaces cannot drift again. */
 function c2paIndexFromSetting(c: { on: boolean; days: number | null } | null, manifest?: ProvenanceManifest): number {
@@ -172,7 +172,7 @@ function styleFrom(html: string): string {
 
 /** Human byte size for a transform utility's before→after result line. */
 function fmtBytes(n?: number): string {
-  if (n === undefined || !Number.isFinite(n)) return '—';
+  if (n === undefined || !Number.isFinite(n)) return '-';
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / 1024 / 1024).toFixed(2)} MB`;
@@ -209,14 +209,14 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
   const [unitIdx, setUnitIdx] = useState(0);
   const [dpi, setDpi] = useState('300');
   const [c2paIdx, setC2paIdx] = useState(0);
-  const [imprintOn, setImprintOn] = useState(true);    // Lolly Imprint (pixel watermark) — on by default, opt-out per export
-  const [durableOn, setDurableOn] = useState(false);   // opt-in durable (TrustMark) credential — raster only, Tier-B
+  const [imprintOn, setImprintOn] = useState(true);    // Lolly Imprint (pixel watermark) - on by default, opt-out per export
+  const [durableOn, setDurableOn] = useState(false);   // opt-in durable (TrustMark) credential - raster only, Tier-B
   const [filename, setFilename] = useState('');
   const [password, setPassword] = useState('');   // standard PDF open-password (from ?password= or typed)
   const [linkKnobs, setLinkKnobs] = useState<string[]>([]);   // export knobs a share link pre-set (shown in the panel)
   // Print-prep params a link carried (bleed/marks/imprint/CMYK press). The TUI has no UI
   // rows for them, but they're threaded into the export dims so a colleague's print-ready
-  // link still exports print-ready — matching the CLI (which reads them from the URL).
+  // link still exports print-ready - matching the CLI (which reads them from the URL).
   const [linkPrint, setLinkPrint] = useState<{ bleed?: string; marks?: string; pressProfile?: string }>({});
   const [outDir, setOutDir] = useState(defaultExportDir());
   const [showImage, setShowImage] = useState(false);
@@ -245,7 +245,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
   const [shareUrl, setShareUrl] = useState('');   // last-generated share link (shown in preview)
   const [rev, setRev] = useState(0);
   // Undo/redo: a stack of full input-model snapshots (values are already resolved, so a
-  // restore is just replaying setInput — no re-mount, no asset re-resolution). `restoring`
+  // restore is just replaying setInput - no re-mount, no asset re-resolution). `restoring`
   // guards refresh() from recording the restore itself as a new edit.
   const histRef = useRef<{ stack: Array<{ q: string; snap: Array<{ id: string; value: unknown }> }>; idx: number }>({ stack: [], idx: -1 });
   const restoringRef = useRef(false);
@@ -254,7 +254,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
   const fmtLockedRef = useRef(false);
 
   // Preview priority (utility = the output is all there is): a utility tool's result
-  // is its PRIMARY pane — auto-shown, and shown even on a narrow terminal — while a
+  // is its PRIMARY pane - auto-shown, and shown even on a narrow terminal - while a
   // designer tool keeps the preview low-priority/opt-in. Subtypes render differently:
   // a file-transform (strip-data/compress-pdf) and a capture (url-shot) show a TEXT
   // result summary, not a half-block raster (a raster is the wrong medium for them).
@@ -262,7 +262,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
   const transform = manifest ? isTransform(manifest) : false;   // strip-data, compress-pdf
   const capture = manifest ? isCaptureTool(manifest) : false;   // url-shot
   // A text-based / interactive utility (text-helper, color-palette, countdown-timer):
-  // its rendered HTML content is the point — render that as terminal text, not a raster.
+  // its rendered HTML content is the point - render that as terminal text, not a raster.
   const htmlDoc = isUtility && !transform && !capture;
   // Interactive = the doc utility's own script is running in a jsdom, so its controls are
   // live. The focused-control list is recomputed each render (DOM order is stable) and
@@ -284,7 +284,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
   // splits the space below Export between a compact Inputs panel and the result panel.
   // Every height is a deterministic fn of dims + isUtility. When they can't all fit (very
   // short terminal), the body containers clip (overflow:hidden) so the prompt/footer are
-  // never overdrawn — the fixed-Panel no-shake invariant holds either way.
+  // never overdrawn - the fixed-Panel no-shake invariant holds either way.
   const stackedUtil = stacked && isUtility;
   // For a stacked utility, cap Export so Inputs (≥4) + Preview (≥3) still get room.
   const exportH = Math.min(EXPORT_FIELDS.length + 5, Math.max(6, bodyH - 4), stackedUtil ? Math.max(6, bodyH - 7) : Infinity);
@@ -330,7 +330,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
         setModel(mdl);
         histRef.current = { stack: [], idx: -1 }; recordSnapshot(m.runtime);   // baseline for undo
         setBlk(null); setChooser(null); setLastExport(null); setPreviewScroll(0);
-        // A utility's result IS the tool — auto-show its preview/summary. Designer tools
+        // A utility's result IS the tool - auto-show its preview/summary. Designer tools
         // keep the preview opt-in (p). A settings-less doc utility (Text Helper …) IS its
         // content, so land focus on the (full-screen) Content pane; else Inputs, or Export
         // when there's nothing to edit.
@@ -338,7 +338,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
         const docUtil = util && !isTransform(m.manifest) && !isCaptureTool(m.manifest) && mdl.length === 0;
         setShowImage(util);
         setFocus(docUtil ? 'preview' : mdl.length === 0 ? 'export' : 'inputs');
-        // A settings-less doc utility whose template ships a <script> becomes INTERACTIVE —
+        // A settings-less doc utility whose template ships a <script> becomes INTERACTIVE -
         // run the tool's own JS in a jsdom so its tabs/buttons/fields work in the terminal.
         // Restricted to no-input tools (text-helper, colour-palette, countdown) so the live
         // DOM is the single source of truth (a tool with declared inputs would have two).
@@ -349,7 +349,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
         setIc(nextIc); setIcSel(0); setIcEdit(null); setIcRev(0);
         // Seed the export panel from the share link's reserved params (link wins over the
         // manifest default), so a colleague's ?format=pdf&w=1200&unit=mm&c2pa=30 link opens
-        // pre-dialled instead of silently resetting every knob. (lang is already applied —
+        // pre-dialled instead of silently resetting every knob. (lang is already applied -
         // mountTool passed it to loadTool, so the sidebar labels arrive translated.)
         const rv = m.reserved;
         const r = (m.manifest as { render?: { width?: number; height?: number; unit?: string } }).render ?? {};
@@ -382,12 +382,12 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
         const marksCsv = rv.marks
           ? [rv.marks.crop && 'crop', rv.marks.registration && 'reg', rv.marks.bleed && 'bleed', rv.marks.colorBars && 'bars', rv.marks.provenance && 'prov'].filter(Boolean).join(',')
           : undefined;
-        // imprint is NOT carried here anymore — it is an editable Imprint row (imprintOn),
+        // imprint is NOT carried here anymore - it is an editable Imprint row (imprintOn),
         // seeded from the same link param above. linkPrint holds only the knobs with no row.
         setLinkPrint({ bleed: rv.bleed ?? undefined, marks: marksCsv || undefined, pressProfile: rv.profile ?? undefined });
         // Name which knobs the link set, for a visible "review this" cue (and to annotate
         // the Export panel title). A failed render (P1: onInit threw, e.g. a capability this
-        // shell can't fulfil) takes priority — surface it loudly instead of a silent preview.
+        // shell can't fulfil) takes priority - surface it loudly instead of a silent preview.
         const knobs = [
           rv.format && 'format', (rv.width != null || rv.height != null) && 'size',
           rv.unit && 'unit', rv.dpi != null && 'dpi', rv.c2pa?.on && 'credential',
@@ -397,8 +397,8 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
         setLinkKnobs(knobs);
         const hookErr = m.runtime.hookErrors[0];
         setStatus(
-          hookErr ? `⚠ Tool failed to render — ${hookErr.message} (this shell may not support it)`
-          : knobs.length ? `Link set: ${knobs.join(', ')} — review Export ↹` : '',
+          hookErr ? `⚠ Tool failed to render - ${hookErr.message} (this shell may not support it)`
+          : knobs.length ? `Link set: ${knobs.join(', ')} - review Export ↹` : '',
         );
         setRev(x => x + 1);
       } catch (e) { if (alive) setStatus('Failed to load: ' + (e as Error).message); }
@@ -435,7 +435,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
       if (interactive && ic) {
         const { lines, focusLine } = ic.renderFocused(Math.max(12, previewCols), icCurrent?.el ?? null);
         setHtmlRuns(lines);
-        // Only pull the focused control into view when it CHANGED (←/→ nav or mount) — never
+        // Only pull the focused control into view when it CHANGED (←/→ nav or mount) - never
         // on a plain content re-render, so manual j/k scrolling isn't yanked back.
         if (focusLine >= 0 && lastIcSelRef.current !== icSelClamped) {
           const rows = previewContentRows;
@@ -453,9 +453,9 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
     } catch { setHtmlRuns(null); }
   }, [rev, icRev, icSelClamped, interactive, ic, htmlDoc, runtime, bridge.dom, previewCols, previewContentRows]);
 
-  // Build an ASCII layout mockup for a designer tool (not utilities — they show content;
-  // not transform/capture — file/URL utilities). Parses the hydrated body in a DETACHED
-  // scratch node (never #canvas — no race with renderSvg) with <style>/<script> stripped
+  // Build an ASCII layout mockup for a designer tool (not utilities - they show content;
+  // not transform/capture - file/URL utilities). Parses the hydrated body in a DETACHED
+  // scratch node (never #canvas - no race with renderSvg) with <style>/<script> stripped
   // (the mockup needs geometry + structure, not CSS, and jsdom's CSS parser throws on some
   // tools' stylesheets). buildMockup picks the SVG-spatial or DOM-structural wireframe.
   useEffect(() => {
@@ -484,7 +484,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
     setRev(r => r + 1); setShareUrl('');
   }
   // Push the current state onto the undo stack (deduped by serialised query, capped, and
-  // truncating any redo tail). Snapshots hold already-resolved input values by reference —
+  // truncating any redo tail). Snapshots hold already-resolved input values by reference -
   // the engine never mutates value objects in place (edits build new arrays/objects).
   function recordSnapshot(rt: Runtime): void {
     const q = currentQuery(rt);
@@ -680,7 +680,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
       case 'c2pa': { const d = C2PA_DAYS[c2paIdx] ?? 0; return d === 0 ? 'off' : `on · ${d}-day cert`; }
       case 'imprint': return isImprintFormat(fmt)
         // A container (pdf/pdf-cmyk/pptx) marks only the raster images it embeds, so a
-        // vector/text-only page carries no mark — say "embedded images only" rather than
+        // vector/text-only page carries no mark - say "embedded images only" rather than
         // overstate an unconditional in-pixel mark. Raster formats mark every pixel.
         ? (imprintOn ? (isImprintContainerFormat(fmt) ? 'on · embedded images only' : 'on · in-pixel mark') : 'off')
         : (imprintOn ? 'on (formats with pixels only)' : 'no pixels to mark');
@@ -694,7 +694,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
 
   function commit(raw: string): void {
     setMode('browse');
-    // Editing a live interactive control — write straight back into the tool's DOM.
+    // Editing a live interactive control - write straight back into the tool's DOM.
     if (icEdit && ic) { ic.setValue(icEdit, raw); setIcEdit(null); bumpIc(); return; }
     // A table cell edit writes back the WHOLE grid (setCell keeps it rectangular).
     if (grid && model[sel]?.type === 'table') {
@@ -704,7 +704,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
       setTable(item, tbl.setCell(t, cur.row, cur.col, raw));
       return;
     }
-    // Block field edit takes priority — coerce by the field's type and write it back.
+    // Block field edit takes priority - coerce by the field's type and write it back.
     if (blk && blk.field >= 0 && model[sel]?.type === 'blocks') {
       const item = model[sel]!;
       const vis = visibleFields(item, blk.row);
@@ -731,7 +731,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
       : raw;
     runtime.setInput(item.id, value as never).then(refresh).catch(() => {});
   }
-  // Load a file from disk into a `file` input — read the bytes and set the FileRef the
+  // Load a file from disk into a `file` input - read the bytes and set the FileRef the
   // engine's transform hooks (strip-data/compress-pdf) read (.bytes). Node reads the file;
   // setInput doesn't (it can't). Clearing the field (empty path) resets the input to null.
   async function loadFileInput(id: string, path: string): Promise<void> {
@@ -749,7 +749,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
   }
   // Import a CSV/JSON file into the pending `blocks` input (importId), replacing its rows
   // with the parsed data via the shared engine importer (parseDataRows). A `table` input
-  // takes the same key but the OTHER engine importer (parseTableText — first row =
+  // takes the same key but the OTHER engine importer (parseTableText - first row =
   // headings), so the terminal fills a grid from a spreadsheet exactly like the CLI's
   // `--<id>-data=table.csv`.
   function importNow(path: string): void {
@@ -852,7 +852,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
       .then(() => setStatus(`✓ Saved project “${nm}”`)).catch(e => setStatus('Save failed: ' + (e as Error).message));
   }
   // Build a lolly.tools share link for the CURRENT state (the hash-share form the web
-  // Share dialog produces — reopens on web, CLI (`lolly <url>`), or the TUI's `u`).
+  // Share dialog produces - reopens on web, CLI (`lolly <url>`), or the TUI's `u`).
   // Shown full-width in the Preview panel to select-copy, and saved as a .txt backup.
   function shareTool(): void {
     if (!runtime) return;
@@ -861,7 +861,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
     setShareUrl(url);
     const file = join(outDir, `${slug(name) || toolId}-link.txt`);
     mkdir(outDir, { recursive: true }).then(() => writeFile(file, url + '\n'))
-      .then(() => setStatus(`🔗 Share link ready — saved → ${file}`))
+      .then(() => setStatus(`🔗 Share link ready - saved → ${file}`))
       .catch(() => setStatus('🔗 Share link ready (shown in Preview)'));
   }
   function doExport(): void {
@@ -882,9 +882,9 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
       // Durable credential: only meaningful for raster formats the mark can ride in;
       // routes the export via the Tier-B web shell, whose durableEmbedCanvas embeds it.
       durable: durableOn && DURABLE_FMTS.includes(fmt) ? true : undefined,
-      // Standard PDF open-password (basic lock) — pdf only; threads to the web-shell tier.
+      // Standard PDF open-password (basic lock) - pdf only; threads to the web-shell tier.
       password: fmt === 'pdf' && password ? password : undefined,
-      // Print-prep carried from a share link (no TUI rows yet) — honoured on the Tier-B tier.
+      // Print-prep carried from a share link (no TUI rows yet) - honoured on the Tier-B tier.
       ...linkPrint,
     };
     const inBytes = fileRef?.size;   // transform utilities: for the before→after headline
@@ -895,14 +895,14 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
         setStatus(`✓ Wrote ${n.toLocaleString()} bytes → ${outPath}`);
       } catch (e) {
         const msg = (e as Error).message;
-        // svg/emf/eps need an <svg> in the template — HTML-layout tools don't have one.
+        // svg/emf/eps need an <svg> in the template - HTML-layout tools don't have one.
         // Rather than fail, fall back to HTML (always renderable in Node) so an export
         // always produces a file, and say what happened.
         if (/<svg>|requires an|browser engine/i.test(msg) && fmt !== 'html') {
           const htmlPath = join(outDir, `${outName}.html`);
           try {
             const n = await exportToFile(runtime, bridge.dom, manifest, 'html', htmlPath, dims);
-            setStatus(`✓ ${fmt.toUpperCase()} needs the desktop app here — wrote HTML instead: ${n.toLocaleString()} bytes → ${htmlPath}`);
+            setStatus(`✓ ${fmt.toUpperCase()} needs the desktop app here - wrote HTML instead: ${n.toLocaleString()} bytes → ${htmlPath}`);
             return;
           } catch (e2) { setStatus('Export failed: ' + (e2 as Error).message); return; }
         }
@@ -961,7 +961,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
       }
       return;
     }
-    // Catalog asset picker overlay — browse & choose a catalog image for an asset input.
+    // Catalog asset picker overlay - browse & choose a catalog image for an asset input.
     if (mode === 'picking') {
       if (!pick) { setMode('browse'); return; }
       if (pick.searching) { if (key.escape) setPick(p => (p ? { ...p, searching: false } : p)); return; }
@@ -1030,7 +1030,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
       }
       if (t === 'asset') { if (key.return || input === 'e') void openAssetPicker({ type: 'field', id: f.id }); return; }
       if (key.return || input === 'e') {
-        // Multi-line block text (longtext fields, or ones flagged multilineFor — e.g. a
+        // Multi-line block text (longtext fields, or ones flagged multilineFor - e.g. a
         // Design box's body) get the full editor; others the single-line field.
         setDraft(fieldStr(row[f.id]));
         setMode(t === 'longtext' || (f.multilineFor && f.multilineFor.length) ? 'editml' : 'editing');
@@ -1124,7 +1124,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
     if (key.upArrow || input === 'k') { setSel(s => Math.max(0, s - 1)); return; }
     if (key.downArrow || input === 'j') { setSel(s => Math.min(Math.max(0, model.length - 1), s + 1)); return; }
     const item = model[sel]; if (!item || !runtime) return;
-    // `i` imports a CSV/JSON file into a blocks input (chart/table data) — the same engine
+    // `i` imports a CSV/JSON file into a blocks input (chart/table data) - the same engine
     // importer the web offers, so you fill rows from a spreadsheet instead of typing them.
     if ((item.type === 'blocks' || item.type === 'table') && (input === 'i' || input === 'I')) { setImportId(item.id); setDraft(''); setMode('importing'); return; }
     if (item.type === 'table' && (key.return || input === 'e')) { setGrid({ row: -1, col: 0 }); return; }
@@ -1173,7 +1173,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
 
   // Normal (top-level) inputs list. A tool with no declared inputs (a reference utility
   // like Text Helper / Colour Palette / Countdown Timer) gets a friendly empty state so
-  // the blank panel doesn't read as broken — it just has nothing to configure.
+  // the blank panel doesn't read as broken - it just has nothing to configure.
   const normalBody = model.length === 0
     ? (
       <Box flexDirection="column">
@@ -1209,7 +1209,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
     if (order.length > visRows) start = Math.min(Math.max(0, selPos - Math.floor(visRows / 2)), order.length - visRows);
     const win = entries.slice(start, start + visRows);
     rowBody = order.length === 0
-      ? <Text color={theme.dim} wrap="wrap">No rows yet — press a to add one.</Text>
+      ? <Text color={theme.dim} wrap="wrap">No rows yet - press a to add one.</Text>
       : <>{win.map(e => {
           const active = e.idx === blk.row;
           const indent = '  '.repeat(Math.min(e.depth, 6));
@@ -1263,7 +1263,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
     const t = tbl.asTable(gridItem.value);
     const cur = tbl.clampCursor(t, grid.row, grid.col);
     if (!t.columns.length) {
-      gridBody = <Text color={theme.dim} wrap="wrap">Empty table — press A to add a column, or i to import a CSV/TSV/Markdown file.</Text>;
+      gridBody = <Text color={theme.dim} wrap="wrap">Empty table - press A to add a column, or i to import a CSV/TSV/Markdown file.</Text>;
     } else {
       const widths = tbl.columnWidths(t, Math.max(10, inputsW - 4));
       const visRows = Math.max(1, inputsH - 5);   // borders + title + heading row + prompt
@@ -1286,7 +1286,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
         <>
           {line(t.columns, -1, false)}
           {t.rows.length === 0
-            ? <Text color={theme.dim} wrap="truncate-end">(no rows — press a to add one)</Text>
+            ? <Text color={theme.dim} wrap="truncate-end">(no rows - press a to add one)</Text>
             : t.rows.slice(start, start + visRows).map((r, i) => line(r, start + i, true))}
         </>
       );
@@ -1404,12 +1404,12 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
     return (<>
       <Text color={theme.accentName} wrap="truncate-end">{url}</Text>
       <Text color={theme.dim} wrap="wrap">{`${width || 'auto'}×${height || 'auto'} ${unit} · ${fmt.toUpperCase()}${cropped ? ' · cropped' : ''}${recolor !== 'none' ? ` · ${recolor}` : ''}`}</Text>
-      <Text color={theme.dim} wrap="wrap">Live capture via Chromium — press x to shoot &amp; save.</Text>
+      <Text color={theme.dim} wrap="wrap">Live capture via Chromium - press x to shoot &amp; save.</Text>
     </>);
   })();
   const utilityBanner = (<>
     <Text color={theme.accentName} wrap="wrap">{a11y || name}</Text>
-    <Text color={theme.dim} wrap="wrap">Renders as {fmt.toUpperCase()} — press x to export &amp; open.</Text>
+    <Text color={theme.dim} wrap="wrap">Renders as {fmt.toUpperCase()} - press x to export &amp; open.</Text>
   </>);
   // A text-based utility renders its actual HTML content as coloured terminal lines; the
   // focused interactive control (r.focused) is shown in reverse video so it's obvious.
@@ -1422,7 +1422,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
         </Text>
       ))
     : utilityBanner;
-  // The ASCII layout mockup (box-drawing wireframe) for a designer tool — its default
+  // The ASCII layout mockup (box-drawing wireframe) for a designer tool - its default
   // preview, and the fallback when the colour raster isn't renderable in the terminal.
   const mockupBody = mockup && mockup.length
     ? mockup.map((ln, i) => <Text key={i} wrap="truncate-end">{ln || ' '}</Text>)
@@ -1435,7 +1435,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
     : (rasterPreview && showImage && !stacked)
       ? (cells && cells.length
         ? cells.map((row, ri) => <Text key={ri} wrap="truncate-end">{row.map((c, ci) => <Text key={ci} color={c.fg} backgroundColor={c.bg}>{c.ch}</Text>)}</Text>)
-        : (mockupBody ?? (isUtility ? utilityBanner : <Text color={theme.dim} wrap="wrap">No terminal preview (HTML-layout output — export to view).</Text>)))
+        : (mockupBody ?? (isUtility ? utilityBanner : <Text color={theme.dim} wrap="wrap">No terminal preview (HTML-layout output - export to view).</Text>)))
     : mockupBody
       ?? (isUtility ? utilityBanner
       : <Text color={theme.dim} wrap="wrap">Press p to render an inline preview here.</Text>);
@@ -1457,9 +1457,9 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
   const controlLine = interactive && focus === 'preview' && icCurrent && !editingIc ? (
     <Text wrap="truncate-end"><Text color={theme.dim}>{`[${icSelClamped + 1}/${focusables.length}] `}</Text><Text color={theme.accentName}>{icControlLabel(icCurrent)}</Text><Text color={theme.dim}>{`  ${icControlHint(icCurrent)}`}</Text></Text>
   ) : interactive && !editingIc ? (
-    <Text color={theme.dim} wrap="truncate-end">{focusables.length ? 'tab in to use · ⏎ activate · j/k move' : 'live — no controls'}</Text>
+    <Text color={theme.dim} wrap="truncate-end">{focusables.length ? 'tab in to use · ⏎ activate · j/k move' : 'live - no controls'}</Text>
   ) : null;
-  // Show the panel for every wide layout, and — narrow — for utilities (whose result is
+  // Show the panel for every wide layout, and - narrow - for utilities (whose result is
   // the whole point). Non-utility narrow terminals stay single-column (no preview).
   const previewPanel = (!stacked || stackedUtil) ? (
     <Panel title={previewTitle} width={stacked ? cols : contentW} height={stacked ? previewH : contentH} active={focus === 'preview'}>
@@ -1520,7 +1520,7 @@ function icControlLabel(f: Focusable): string {
   const short = l.length > 28 ? l.slice(0, 27) + '…' : l;
   return f.kind === 'button' || f.kind === 'link' ? `‹${short}›` : short;
 }
-/** What ⏎ (or ←→) does to the focused control — shown in the status readout. */
+/** What ⏎ (or ←→) does to the focused control - shown in the status readout. */
 function icControlHint(f: Focusable): string {
   if (f.kind === 'text') return '⏎ edit';
   if (f.kind === 'select') return '⏎ cycle';
@@ -1558,7 +1558,7 @@ function parseVector(item: ModelItem, raw: string): InputValue {
 function editHint(item: ModelItem): string {
   if (item.type === 'boolean') return item.value ? '[x] on' : '[ ] off';
   if (item.type === 'select') { const o = item.options?.find(x => x.value === item.value); return `‹ ${o?.label ?? String(item.value ?? '')} ›`; }
-  if (item.type === 'blocks') { const n = Array.isArray(item.value) ? item.value.length : 0; return `${n} ${n === 1 ? 'row' : 'rows'} — ⏎ to edit`; }
+  if (item.type === 'blocks') { const n = Array.isArray(item.value) ? item.value.length : 0; return `${n} ${n === 1 ? 'row' : 'rows'} - ⏎ to edit`; }
   if (item.type === 'table') return tbl.tableSummary(item.value);
   const s = stringifyValue(item);
   if (item.type === 'number' && item.min !== undefined && item.max !== undefined) {
@@ -1568,10 +1568,10 @@ function editHint(item: ModelItem): string {
     return `‹ ${'█'.repeat(filled)}${'░'.repeat(W - filled)} › ${cur}`;
   }
   if (item.type === 'vector') { const fs = item.fields ?? []; const v = (item.value ?? {}) as Record<string, number>; const parts = fs.map(f => `${f.label ?? f.id} ${v[f.id] ?? f.default ?? 0}`); return parts.length ? `${parts.join(' · ')}  (⏎ edit)` : '(⏎ edit)'; }
-  if (item.type === 'file') return s || '(⏎ — type a file path)';
+  if (item.type === 'file') return s || '(⏎ - type a file path)';
   if (item.type === 'asset') return s ? `${s}  (⏎ browse · e type)` : '(⏎ browse catalog · e type id/URL)';
   if (!TEXTUAL.has(item.type)) return s || '(edit in the web/desktop app)';
-  return s || '—';
+  return s || '-';
 }
 /** Stringify a block sub-field value (asset refs → their id/name). */
 function fieldStr(v: InputValue | undefined): string {
@@ -1587,7 +1587,7 @@ function fieldDisplay(f: BlockFieldSpec, row: BlockRow): string {
   if (t === 'select') { const o = f.options?.find(x => x.value === v); return `‹ ${o?.label ?? String(v ?? '')} ›`; }
   if (t === 'asset') { const s = fieldStr(v); return s ? `${s}  (⏎ browse)` : '(⏎ browse catalog)'; }
   const s = fieldStr(v).replace(/\n/g, '↵');
-  return s || '—';
+  return s || '-';
 }
 /** A short human label for a block row (discriminator · text, or an ordinal). */
 function rowLabel(item: ModelItem, idx: number): string {

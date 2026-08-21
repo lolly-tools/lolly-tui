@@ -36,7 +36,7 @@ export function App({ tools, bridge }: { tools: ToolEntry[]; bridge: TuiBridge }
     else setRoute({ name: 'gallery' });
   };
 
-  // Open a tool from a pasted lolly.tools URL with its settings pre-filled — the same
+  // Open a tool from a pasted lolly.tools URL with its settings pre-filled - the same
   // parseToolUrl → mountTool(query) path the web share links use. Returns an error
   // string for the caller to surface, or null on success (navigated).
   const openToolUrl = (url: string): string | null => {

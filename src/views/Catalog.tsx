@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * Catalog — browse the SAME on-disk asset registry the web catalog view shows
+ * Catalog - browse the SAME on-disk asset registry the web catalog view shows
  * (catalog/assets/index.json). A searchable, windowed list with a live detail line;
  * keyboard-first (j/k move, / search, 1–4 switch section). Favourite (f) and hide (d)
- * assets — persisted on the profile like the web catalog; favourites sort to the top and
+ * assets - persisted on the profile like the web catalog; favourites sort to the top and
  * lead the asset picker, hidden assets drop out of the picker. To USE an asset, open a
- * tool and press ⏎ on an `asset` input — the picker there reads this same catalog.
+ * tool and press ⏎ on an `asset` input - the picker there reads this same catalog.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
@@ -36,7 +36,7 @@ export function Catalog({ onNav, onQuit, onOpenTool }: { onNav: (t: NavTarget) =
   const hidden = useMemo(() => loadHidden(profile), [profile]);
 
   // Filter by search, then float favourites to the top. Hidden assets stay visible here
-  // (marked) so they can be un-hidden — only the picker drops them.
+  // (marked) so they can be un-hidden - only the picker drops them.
   const filtered = useMemo(
     () => (assets ? sortFavouritesFirst(filterAssets(assets, query), favs) : []),
     [assets, query, favs],
@@ -57,7 +57,7 @@ export function Catalog({ onNav, onQuit, onOpenTool }: { onNav: (t: NavTarget) =
   const windowed = filtered.slice(scroll, scroll + listH);
   const current = filtered[clamped];
 
-  // Persist a profile change (favourite/hide toggle) — update the view immediately, write in the background.
+  // Persist a profile change (favourite/hide toggle) - update the view immediately, write in the background.
   function persist(next: Record<string, unknown>): void { setProf(next); void setProfile(next); }
 
   useInput((input, key) => {

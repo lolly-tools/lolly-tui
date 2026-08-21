@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * Tool gallery — the terminal analogue of the web gallery grid. Responsive: it packs
+ * Tool gallery - the terminal analogue of the web gallery grid. Responsive: it packs
  * as many fixed-width cards per row as the terminal is wide (desktop grid), collapsing
  * to a single column on a narrow terminal (mobile). Keyboard-first: arrows or hjkl to
  * move, `/` to search, Enter to open, `q` to quit.
@@ -21,7 +21,7 @@ import { fmtEmoji, catEmoji, toolIcon } from '../emoji.ts';
 import { isBrowserOnly } from '../tool-support.ts';
 
 const CARD_W = 26;
-const CARD_H = 4;   // border(2) + name(1) + subtitle(1) — cards never shrink below this
+const CARD_H = 4;   // border(2) + name(1) + subtitle(1) - cards never shrink below this
 
 export function Gallery({ tools, onOpen, onOpenUrl, onImportFile, onNav, onQuit }: { tools: ToolEntry[]; onOpen: (id: string) => void; onOpenUrl: (url: string) => string | null; onImportFile: (path: string) => Promise<string | null>; onNav: (t: NavTarget) => void; onQuit: () => void }) {
   const { cols, rows } = useTermSize();
@@ -36,7 +36,7 @@ export function Gallery({ tools, onOpen, onOpenUrl, onImportFile, onNav, onQuit 
   const [importDraft, setImportDraft] = useState('');
   const [importErr, setImportErr] = useState('');
   const [sel, setSel] = useState(0);
-  // Star tools (persisted to profile.favourites), sort, and a favourites-only filter — parity
+  // Star tools (persisted to profile.favourites), sort, and a favourites-only filter - parity
   // with the web gallery's ★ favourites + sort control.
   const [profile, setProf] = useState<Record<string, unknown>>({});
   const [sortMode, setSortMode] = useState<ToolSort>('catalog');
@@ -45,13 +45,13 @@ export function Gallery({ tools, onOpen, onOpenUrl, onImportFile, onNav, onQuit 
   useEffect(() => { void getProfile().then(setProf); }, []);
   const favs = useMemo(() => loadToolFavourites(profile), [profile]);
 
-  // Turn off tools this Node shell can't run (browser-only raster/video capture — e.g.
+  // Turn off tools this Node shell can't run (browser-only raster/video capture - e.g.
   // URL Screenshot, video recorders). Everything that renders svg/html/text/data, plus the
   // file-transform utilities, stays. See tool-support.ts.
   const usable = useMemo(() => tools.filter(t => !isBrowserOnly(t)), [tools]);
   const hidden = tools.length - usable.length;
 
-  // Category filter — the distinct categories present, in catalog order (`c` cycles them).
+  // Category filter - the distinct categories present, in catalog order (`c` cycles them).
   const categories = useMemo(() => [...new Set(usable.map(t => t.category).filter((c): c is string => !!c))], [usable]);
   const catFilter = catIdx > 0 ? categories[(catIdx - 1) % Math.max(1, categories.length)] : null;
 
@@ -180,7 +180,7 @@ export function Gallery({ tools, onOpen, onOpenUrl, onImportFile, onNav, onQuit 
                     >
                       <Text bold wrap="truncate-end" color={active ? theme.accentName : undefined}>{favs.has(t.id) ? '★' : toolIcon(t.id, t.category)} {t.name}</Text>
                       <Text color={theme.dim} wrap="truncate-end">
-                        {fmtEmoji(fmt)} {fmt ? String(fmt).toUpperCase() : '—'} · {catEmoji(t.category)} {t.category ?? 'tool'}
+                        {fmtEmoji(fmt)} {fmt ? String(fmt).toUpperCase() : '-'} · {catEmoji(t.category)} {t.category ?? 'tool'}
                       </Text>
                     </Box>
                   );

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * Projects — saved sessions (see store.ts) organised into nestable FOLDERS (see
+ * Projects - saved sessions (see store.ts) organised into nestable FOLDERS (see
  * folders.ts), the terminal analogue of the web /p view. The list shows the folders
  * at the current level plus the sessions that live here (at the top level that's the
- * "uncategorised" bucket — every session in no folder). Drill into a folder with ⏎,
+ * "uncategorised" bucket - every session in no folder). Drill into a folder with ⏎,
  * back out with ← / esc.
  *
  * Keys: n new folder · ⏎/o open (folder → drill in, session → reopen the tool) ·
@@ -14,7 +14,7 @@
  *
  * Formats: the picker offers the union of the batch's tools' declared formats (svg
  * default). svg/emf/eps + data formats render DOM-free; raster/pdf/video render via the
- * scoped Chromium tier once `lolly install-browser` has run — when it's missing, those
+ * scoped Chromium tier once `lolly install-browser` has run - when it's missing, those
  * rows fall back to HTML with a per-row note (never silently). See batch-export.ts.
  */
 import { useEffect, useMemo, useState } from 'react';
@@ -96,7 +96,7 @@ export function Projects({ toolName, folderId, bridge, onOpen, onOpenFolder, onN
   };
   useEffect(() => { void reload(); }, []);
   useEffect(() => {
-    // Declared formats from the generated catalog index (same source as the gallery) —
+    // Declared formats from the generated catalog index (same source as the gallery) -
     // on any read failure the picker still offers svg + the html fallback.
     loadTools()
       .then(ts => setToolFormats(new Map(ts.map(t => [t.id, (t.formats ?? []).map(f => f.toLowerCase())]))))
@@ -126,7 +126,7 @@ export function Projects({ toolName, folderId, bridge, onOpen, onOpenFolder, onN
 
   // Flattened folder tree (indented) as move targets, plus an "uncategorised" option.
   const moveTargets = useMemo<Array<{ id: string | null; name: string; depth: number }>>(() => {
-    const out: Array<{ id: string | null; name: string; depth: number }> = [{ id: null, name: '— Uncategorised (no folder) —', depth: 0 }];
+    const out: Array<{ id: string | null; name: string; depth: number }> = [{ id: null, name: '- Uncategorised (no folder) -', depth: 0 }];
     const walk = (parent: string | null, depth: number): void => {
       for (const f of childFolders(fs, parent)) { out.push({ id: f.id, name: f.name, depth }); walk(f.id, depth + 1); }
     };
@@ -220,7 +220,7 @@ export function Projects({ toolName, folderId, bridge, onOpen, onOpenFolder, onN
       .then(text => {
         const rows = parseBatchCsv(text);
         if (!rows.length) { setMode('browse'); setStatus('No rows found (need a header row with a toolId column).'); return; }
-        setStatus(`${rows.length} row${rows.length === 1 ? '' : 's'} loaded — pick the default format (rows with their own format column keep it).`);
+        setStatus(`${rows.length} row${rows.length === 1 ? '' : 's'} loaded - pick the default format (rows with their own format column keep it).`);
         stageBatch({ kind: 'csv', rows, name: basename(path).replace(/\.[^.]+$/, '') });
       })
       .catch(e => { setMode('browse'); setStatus(`Couldn't read ${raw}: ${(e as Error).message}`); });
@@ -230,7 +230,7 @@ export function Projects({ toolName, folderId, bridge, onOpen, onOpenFolder, onN
   // ── Input ──────────────────────────────────────────────────────────────────
   useInput((input, key) => {
     // Text-entry modes: the TextInput owns typing/submit; esc cancels (zipPrompt steps
-    // back to the format picker — the batch is still staged).
+    // back to the format picker - the batch is still staged).
     if (mode === 'creating' || mode === 'renaming' || mode === 'zipPrompt' || mode === 'csvPrompt') {
       if (key.escape) {
         if (mode === 'zipPrompt') { setDraft(''); setMode('formatPick'); return; }
@@ -351,8 +351,8 @@ export function Projects({ toolName, folderId, bridge, onOpen, onOpenFolder, onN
         ? <Text color={theme.dim}>Loading…</Text>
         : rows.length === 0
           ? <Text color={theme.dim} wrap="wrap">{folderId != null
-              ? 'Empty folder — press n for a sub-folder, or move a project in with m from the top level.'
-              : 'No folders or projects yet — press n to make a folder, or open a tool and press s to save a project.'}</Text>
+              ? 'Empty folder - press n for a sub-folder, or move a project in with m from the top level.'
+              : 'No folders or projects yet - press n to make a folder, or open a tool and press s to save a project.'}</Text>
           : windowed.map((row, i) => {
             const active = startIdx + i === clamped;
             if (row.kind === 'folder') {
@@ -400,8 +400,8 @@ export function Projects({ toolName, folderId, bridge, onOpen, onOpenFolder, onN
   const browserOk = browserInstalled();
   const tierNoteOf = (f: string): string => {
     if (NODE_FORMATS.includes(f)) return '';
-    if (f === 'png') return browserOk ? 'browser tier for HTML-layout tools' : 'browser tier missing — HTML-layout tools fall back to HTML';
-    return browserOk ? 'browser tier' : 'browser tier missing — falls back to HTML';
+    if (f === 'png') return browserOk ? 'browser tier for HTML-layout tools' : 'browser tier missing - HTML-layout tools fall back to HTML';
+    return browserOk ? 'browser tier' : 'browser tier missing - falls back to HTML';
   };
   const fVisible = Math.max(1, bodyH - 2 - (pending?.kind === 'csv' ? 1 : 0));
   const fStart = Math.max(0, Math.min(fmtSel, Math.max(0, fmtChoices.length - fVisible)));
@@ -419,7 +419,7 @@ export function Projects({ toolName, folderId, bridge, onOpen, onOpenFolder, onN
         );
       })}
       {pending?.kind === 'csv'
-        ? <Text color={theme.dim} wrap="truncate-end">CSV rows with their own format column keep it — this picks the default.</Text>
+        ? <Text color={theme.dim} wrap="truncate-end">CSV rows with their own format column keep it - this picks the default.</Text>
         : null}
     </Panel>
   );
@@ -466,14 +466,14 @@ function footerNote(mode: Mode, delFolder: Folder | null, delSession: SavedSessi
   if (mode === 'formatPick') {
     return browserInstalled()
       ? 'j/k choose · ⏎ use format · esc cancel'
-      : 'Browser tier not installed — run `lolly install-browser` once for raster/pdf/video; those rows fall back to HTML.';
+      : 'Browser tier not installed - run `lolly install-browser` once for raster/pdf/video; those rows fall back to HTML.';
   }
   if (mode === 'moveTarget') return 'j/k choose · ⏎ move here · esc cancel';
   return undefined;
 }
 
 function footerShortcuts(mode: Mode, folderId: string | null, prog: Prog | null): Array<{ key: string; label: string }> {
-  if (mode === 'exporting') return prog?.finished ? [{ key: '⏎', label: 'close' }] : [{ key: '…', label: 'exporting — please wait' }];
+  if (mode === 'exporting') return prog?.finished ? [{ key: '⏎', label: 'close' }] : [{ key: '…', label: 'exporting - please wait' }];
   if (mode === 'formatPick') return [{ key: 'j/k', label: 'choose' }, { key: '⏎', label: 'use format' }, { key: 'esc', label: 'cancel' }];
   if (mode === 'moveTarget') return [{ key: 'j/k', label: 'choose' }, { key: '⏎', label: 'move here' }, { key: 'esc', label: 'cancel' }];
   return [

@@ -5,7 +5,7 @@
  * given width/height so the panel NEVER shakes as the log grows. Owns its own quip timer.
  *
  * Glyph rules (same fixed-width discipline as emoji.ts): the bar uses width-1 block
- * glyphs (█/░) and the log status prefixes are width-1 (✓/⚠/✗) — NO width-2 emoji here.
+ * glyphs (█/░) and the log status prefixes are width-1 (✓/⚠/✗) - NO width-2 emoji here.
  */
 import { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
@@ -35,7 +35,7 @@ function colourFor(line: string): string | undefined {
 }
 
 export function Progress({ title = 'Exporting…', done, total, log, width, height, active = false, finished = false, note }: ProgressProps): JSX.Element {
-  // Rotate the quip on a timer — independent of React re-renders, so a burst of onProgress
+  // Rotate the quip on a timer - independent of React re-renders, so a burst of onProgress
   // updates doesn't re-randomise the line.
   const [tick, setTick] = useState(0);
   useEffect(() => {

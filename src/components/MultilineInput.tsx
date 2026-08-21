@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * A real multi-line text editor for the TUI — the terminal counterpart to a web
+ * A real multi-line text editor for the TUI - the terminal counterpart to a web
  * <textarea>, used to edit `longtext` inputs (Code Canvas's code, digi-ad copy, layout
  * box text, …) with actual line breaks instead of the single-line field's `\n` escape.
  *

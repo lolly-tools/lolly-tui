@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 /**
- * A fixed-size bordered panel — the building block of the "hard masonry" layout.
+ * A fixed-size bordered panel - the building block of the "hard masonry" layout.
  * Give it an explicit width/height and it NEVER resizes as its content changes, so
  * nothing shakes: callers window their content to fit and the panel reserves the space
  * regardless. Mirrors the web UI's bordered cards/sidebar.
