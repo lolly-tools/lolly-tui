@@ -31,13 +31,13 @@ const CAT: Record<string, string> = {
 // trade-offs on a single card. Unmapped tools fall back to the category emoji.
 const TOOL: Record<string, string> = {
   'color-block': '🔷', 'dynamic-layout': '📰', 'quotes': '💬', 'meeting-planner': '💼',
-  'code-canvas': '💻', 'qr-code': '🔳', 'tool-logo': '🐧💚🦎',
+  'snippet': '💻', 'qr-code': '🔳', 'tool-logo': '🐧💚🦎',
   'email-signature': '📧', 'chart-creator': '📊', 'color-palette': '🎨',
   'countdown-timer': '🕐', 'url-shot': '📸', 'strip-data': '🔒',
   'text-helper': '📝', 'event-name-badge': '📛', 'wayfinding-signage': '🚏', 'brand-lockup': '🔖',
   'digi-ad': '📺', 'calendar-ics': '📅', 'compress-pdf': '📉', 'multi-page-pdf': '📚',
   'filter': '🌗', 'logo-wall': '🏁', 'diagram-builder': '🔗',
-  'logo-lockup-partner': '🏢', 'web-icon': '💠', 'design': '📐', 'lottie-digi-ad': '🎬',
+  'logo-lockup-partner': '🏢', 'icon': '💠', 'design': '📐', 'lottie-digi-ad': '🎬',
   'pose-geeko': '🦎', 'voice-recorder': '🎤', 'top-tail-recorder': '📹',
 };
 
