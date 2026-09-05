@@ -65,6 +65,7 @@ export function Catalog({ onNav, onQuit, onOpenTool }: { onNav: (t: NavTarget) =
     if (input === '1') return onNav('tools');
     if (input === '2') return onNav('projects');
     if (input === '3') return onNav('profile');
+    if (input === '5') return onNav('system');
     if (input === 'q') return onQuit();
     if (input === '/') { setSearching(true); return; }
     if (input === 'f' && current) { persist(withFavouriteToggled(profile, current.id)); return; }

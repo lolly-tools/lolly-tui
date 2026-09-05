@@ -263,6 +263,7 @@ export function Projects({ toolName, folderId, bridge, onOpen, onOpenFolder, onN
     if (input === '1') return onNav('tools');
     if (input === '3') return onNav('profile');
     if (input === '4') return onNav('catalog');
+    if (input === '5') return onNav('system');
     if (input === 'q') return onQuit();
     if ((key.leftArrow || key.escape || key.backspace || input === 'h') && folderId != null) {
       onOpenFolder(currentFolder?.parentId ?? null); setSel(0); setStatus(''); return;

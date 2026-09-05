@@ -9,6 +9,7 @@ import { render } from 'ink';
 import { App } from './App.tsx';
 import { createTuiBridge } from './bridge.ts';
 import { loadTools } from './catalog.ts';
+import { nodeStartSeen } from '@lolly-tools/node-shell/design-systems';
 
 const ENTER_ALT = '\x1b[?1049h\x1b[2J\x1b[H';   // alt buffer + clear + home
 const LEAVE_ALT = '\x1b[?1049l';
@@ -18,7 +19,7 @@ async function main(): Promise<void> {
     process.stderr.write('lolly-tui needs an interactive terminal (TTY). Run it directly, e.g. `npm run tui`.\n');
     process.exit(1);
   }
-  const [bridge, tools] = await Promise.all([createTuiBridge(), loadTools()]);
+  const [bridge, tools, startSeen] = await Promise.all([createTuiBridge(), loadTools(), nodeStartSeen()]);
 
   process.stdout.write(ENTER_ALT);
   let restored = false;
@@ -28,7 +29,7 @@ async function main(): Promise<void> {
   process.on('SIGINT', () => { restore(); process.exit(0); });
   process.on('SIGTERM', () => { restore(); process.exit(0); });
 
-  const { waitUntilExit } = render(<App tools={tools} bridge={bridge} />);
+  const { waitUntilExit } = render(<App tools={tools} bridge={bridge} firstRun={!startSeen} />);
   await waitUntilExit();
   restore();
   // Tear down the browser render tier if it was ever launched (lazy singletons -

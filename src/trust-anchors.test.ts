@@ -4,7 +4,7 @@
  * module that stopped the TUI verifying the SAME bytes as untrusted while the CLI
  * (`--trust-anchor=root.pem`) called them trusted, so the cases below pin the parts a
  * wrong verdict would hinge on: which paths are pinned, that the vendored C2PA list is
- * always present, that the Lolly root stays UNpinned (matching the CLI), and that a
+ * always present, that the Lolly root IS pinned (matching the CLI validator), and that a
  * broken PEM is reported rather than silently costing the user their other anchors.
  */
 import test from 'node:test';

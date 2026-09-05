@@ -292,7 +292,7 @@ async function renderSessionTo(
 ): Promise<BatchMember> {
   const label = session.label || session.toolId;
   try {
-    const { runtime, manifest } = await mountTool(session.toolId, host, session.query);
+    const { runtime, manifest } = await mountTool(session.toolId, host, session.query, session.data);
     const avail = exportableFormats(manifest);
     const fmt = avail.includes(want) ? want : (avail[0] ?? 'html');
     // A batch-wide format won't exist on every tool - substitute, but say so per-row.

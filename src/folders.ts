@@ -2,10 +2,11 @@
 /**
  * Folders - organise saved sessions into named, nestable groups.
  *
- * The web shell stores folders on the single profile record (host.profile). The TUI has
- * no such facade - its store is plain JSON files under the config dir (`~/.lolly`, or
- * $LOLLY_TUI_DIR), one file per saved session (see store.ts). So folders get their OWN
- * file, `folders.json`, holding a bare `Folder[]`. This module mirrors the STRUCTURE of the
+ * The web shell stores folders on the single profile record (host.profile), and the
+ * desktop app keeps that record in IndexedDB, so there is no folder file on disk to share
+ * with the desktop yet. The TUI has no such facade either - its store is plain JSON files
+ * under the state directory resolveStateDir() picks (see store.ts). So folders get their
+ * OWN file, `folders.json`, holding a bare `Folder[]`. This module mirrors the shape of the
  * web `folders.ts` (same tree semantics: single-rooted hierarchy, a session belongs to at
  * most one folder, cycles are refused) but the persistence is a flat read-modify-write of
  * one JSON array - it does NOT reuse the browser code, which is a host.profile facade.
@@ -15,12 +16,16 @@
  * `prune(validSlots)` on load. Deleting a folder never deletes the sessions it held - they
  * revert to "uncategorised".
  */
-import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
+import { resolveStateDir } from '@lolly-tools/node-shell/state-dir';
 
-const DIR = process.env.LOLLY_TUI_DIR || join(homedir(), '.lolly');
+// The same directory store.ts resolves: $LOLLY_STATE_DIR, then the desktop app's data
+// directory when the app is installed here, then ~/.lolly. This used to read only
+// $LOLLY_TUI_DIR, so folders were left behind in ~/.lolly the moment anyone set the
+// current variable and the Projects tree came up empty (plans/202 WP3.1).
+const DIR = resolveStateDir().dir;
 
 export interface FolderItem {
   type: 'session';        // only sessions in the TUI (no user-image assets here)

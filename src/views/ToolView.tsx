@@ -38,7 +38,7 @@ import { loadAssets } from '../catalog.ts';
 import type { AssetRow } from '../catalog.ts';
 import { filterAssets, assetEmoji, assetDetail } from '../lib/asset-list.ts';
 import { loadFavourites, loadHidden, sortFavouritesFirst } from '../lib/asset-favourites.ts';
-import { mountTool, renderSvg, exportToFile, exportableFormats, currentQuery, isTransform, isCaptureTool } from '../engine-render.ts';
+import { mountTool, renderSvg, exportToFile, exportableFormats, currentQuery, modelValues, isTransform, isCaptureTool } from '../engine-render.ts';
 import { matchedExportFormat } from '@lolly-tools/node-shell/raster';
 import type { Runtime, Manifest } from '../engine-render.ts';
 import { svgToCells } from '../terminal-image.ts';
@@ -178,7 +178,7 @@ function fmtBytes(n?: number): string {
   return `${(n / 1024 / 1024).toFixed(2)} MB`;
 }
 
-export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; query?: string; bridge: TuiBridge; onBack: () => void }) {
+export function ToolView({ toolId, query, values, bridge, onBack }: { toolId: string; query?: string; values?: Record<string, unknown>; bridge: TuiBridge; onBack: () => void }) {
   const { cols, rows } = useTermSize();
   const [runtime, setRuntime] = useState<Runtime | null>(null);
   const [manifest, setManifest] = useState<Manifest | null>(null);
@@ -242,6 +242,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
   const focusablesRef = useRef<Focusable[]>([]);
   const lastIcSelRef = useRef(-1);   // auto-scroll only when the selected control CHANGES
   const [status, setStatus] = useState('Loading…');
+  const [loading, setLoading] = useState(true);
   const [shareUrl, setShareUrl] = useState('');   // last-generated share link (shown in preview)
   const [rev, setRev] = useState(0);
   // Undo/redo: a stack of full input-model snapshots (values are already resolved, so a
@@ -321,9 +322,10 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
 
   useEffect(() => {
     let alive = true;
+    setLoading(true);
     (async () => {
       try {
-        const m = await mountTool(toolId, bridge.host, query ?? '');
+        const m = await mountTool(toolId, bridge.host, query ?? '', values);
         if (!alive) return;
         setRuntime(m.runtime); setManifest(m.manifest);
         const mdl = m.runtime.getModel() as unknown as ModelItem[];
@@ -400,11 +402,15 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
           hookErr ? `⚠ Tool failed to render - ${hookErr.message} (this shell may not support it)`
           : knobs.length ? `Link set: ${knobs.join(', ')} - review Export ↹` : '',
         );
+        setLoading(false);
         setRev(x => x + 1);
-      } catch (e) { if (alive) setStatus('Failed to load: ' + (e as Error).message); }
+      } catch (e) { if (alive) { setLoading(false); setStatus('Failed to load: ' + (e as Error).message); } }
     })();
     return () => { alive = false; };
-  }, [toolId, query, bridge.host]);
+    // `values` is in the deps because two desktop-saved sessions of the SAME tool arrive
+    // with the same toolId and an empty query - only the values tell them apart. The route
+    // hands over one object per open, so its identity changes exactly when the session does.
+  }, [toolId, query, values, bridge.host]);
 
   // Close the interactive canvas's jsdom when the whole view unmounts.
   useEffect(() => () => { icRef.current?.destroy(); }, []);
@@ -848,7 +854,9 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
   function saveNow(label: string): void {
     setMode('browse'); if (!runtime) return;
     const nm = label.trim() || name;
-    saveSession({ slot: `${toolId}-${Date.now()}`, toolId, label: nm, query: currentQuery(runtime), updatedAt: new Date().toISOString() })
+    // Both halves go in: the URL-state the TUI reopens from, and the resolved values the
+    // desktop app and the web shell read (plans/202 WP3.1).
+    saveSession({ slot: `${toolId}-${Date.now()}`, toolId, label: nm, query: currentQuery(runtime), values: modelValues(runtime), updatedAt: new Date().toISOString() })
       .then(() => setStatus(`✓ Saved project “${nm}”`)).catch(e => setStatus('Save failed: ' + (e as Error).message));
   }
   // Build a lolly.tools share link for the CURRENT state (the hash-share form the web
@@ -1174,7 +1182,9 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
   // Normal (top-level) inputs list. A tool with no declared inputs (a reference utility
   // like Text Helper / Colour Palette / Countdown Timer) gets a friendly empty state so
   // the blank panel doesn't read as broken - it just has nothing to configure.
-  const normalBody = model.length === 0
+  const normalBody = loading
+    ? <Text color={theme.dim}>Loading settings…</Text>
+    : model.length === 0
     ? (
       <Box flexDirection="column">
         <Text color={theme.dim} wrap="wrap">This utility has no settings.</Text>
@@ -1442,10 +1452,12 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
   const scrollTag = htmlDoc && htmlRuns && htmlRuns.length > previewContentRows
     ? ` · ${previewScroll + 1}-${Math.min(previewScroll + previewContentRows, htmlRuns.length)}/${htmlRuns.length}`
     : '';
-  const previewTitle = shareUrl ? 'Share link (y)' : transform ? 'Result' : capture ? 'Capture'
-    : htmlDoc ? `${interactive ? 'Live' : 'Content'}${scrollTag}${previewFocusable && focus !== 'preview' ? ' (tab)' : ''}`
-    : showImage ? 'Preview'
-    : (mockup && mockup.length) ? 'Layout · p for image'
+  // Keep the first word stable across hydration. Some terminals still consume the
+  // first changed border-title cell on Ink's in-place repaint, so render one spare.
+  const previewTitle = shareUrl ? 'Preview · share link (y)' : transform ? 'Preview · result' : capture ? 'Preview · capture'
+    : htmlDoc ? `Preview · ${interactive ? 'live' : 'content'}${scrollTag}${previewFocusable && focus !== 'preview' ? ' (tab)' : ''}`
+    : showImage ? 'Preview · image'
+    : (mockup && mockup.length) ? 'Preview · layout · p for image'
     : 'Preview (p)';
   // Editing a live control happens in place: the whole content pane becomes the editor
   // (a textarea → the full multi-line editor, a plain field → a single-line input).
@@ -1462,7 +1474,7 @@ export function ToolView({ toolId, query, bridge, onBack }: { toolId: string; qu
   // Show the panel for every wide layout, and - narrow - for utilities (whose result is
   // the whole point). Non-utility narrow terminals stay single-column (no preview).
   const previewPanel = (!stacked || stackedUtil) ? (
-    <Panel title={previewTitle} width={stacked ? cols : contentW} height={stacked ? previewH : contentH} active={focus === 'preview'}>
+    <Panel key={previewTitle} title={` ${previewTitle}`} width={stacked ? cols : contentW} height={stacked ? previewH : contentH} active={focus === 'preview'}>
       {editingIc ? icEditor : previewBody}
       {controlLine}
     </Panel>

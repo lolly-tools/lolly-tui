@@ -10,7 +10,7 @@ import { readFile } from 'node:fs/promises';
 import { basename, extname } from 'node:path';
 import { homedir } from 'node:os';
 import { parsePdfBytes } from './import/pdf.ts';
-import { mountTool, currentQuery, type Manifest } from './engine-render.ts';
+import { mountTool, currentQuery, modelValues, type Manifest } from './engine-render.ts';
 import { saveSession } from './store.ts';
 import type { DesignMapOptions } from '@lolly/engine';
 import type { HostV1 } from '@lolly-tools/core/host-v1';
@@ -81,6 +81,6 @@ export async function importDesignFile(path: string, host: HostV1): Promise<Impo
 
   const label = `Imported ${basename(path)}`;
   const slot = `design-${Date.now()}`;
-  await saveSession({ slot, toolId: 'design', label, query, updatedAt: new Date().toISOString() });
+  await saveSession({ slot, toolId: 'design', label, query, values: modelValues(runtime), updatedAt: new Date().toISOString() });
   return { slot, label, query, toolId: 'design', boxes: boxes.length };
 }

@@ -5,8 +5,8 @@
  * which is where the two rules that matter live - cascade delete never touches sessions,
  * and a session belongs to at most one folder.
  *
- * `folders.ts` reads $LOLLY_TUI_DIR ONCE at module load, so the env var is set before the
- * dynamic import below; every case then runs against a throwaway temp dir.
+ * `folders.ts` resolves its directory ONCE at module load, so $LOLLY_STATE_DIR is set
+ * before the dynamic import below; every case then runs against a throwaway temp dir.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -17,7 +17,7 @@ import { join } from 'node:path';
 import type { Folder } from './folders.ts';
 
 const DIR = await mkdtemp(join(tmpdir(), 'lolly-tui-folders-'));
-process.env.LOLLY_TUI_DIR = DIR;
+process.env.LOLLY_STATE_DIR = DIR;
 const F = await import('./folders.ts');
 
 process.on('exit', () => { try { rmSync(DIR, { recursive: true, force: true }); } catch { /* best effort */ } });
@@ -31,6 +31,14 @@ function folder(id: string, parentId: string | null, refs: string[] = []): Folde
 async function reset(): Promise<void> {
   await writeFile(F.foldersPath(), '[]');
 }
+
+// ── Where the file lives ─────────────────────────────────────────────────────
+
+test('folders.json sits in the resolved state directory, not a directory of its own', () => {
+  // This used to read only $LOLLY_TUI_DIR, so setting the current variable moved the
+  // sessions and left the folders behind in ~/.lolly (plans/202 WP3.1).
+  assert.equal(F.foldersPath(), join(DIR, 'folders.json'));
+});
 
 // ── Pure tree helpers ────────────────────────────────────────────────────────
 

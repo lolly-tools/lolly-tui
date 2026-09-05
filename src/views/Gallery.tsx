@@ -65,6 +65,7 @@ export function Gallery({ tools, onOpen, onOpenUrl, onImportFile, onNav, onQuit 
 
   const gridCols = Math.max(1, Math.min(Math.max(filtered.length, 1), Math.floor((cols - 2) / CARD_W)));
   const isMobile = gridCols <= 1;
+  const compactHeader = cols < 92;
   const clamped = Math.min(Math.max(sel, 0), Math.max(0, filtered.length - 1));
 
   // Windowed SCROLL (not squish): show only the card-rows that fit, and edge-scroll the
@@ -105,6 +106,7 @@ export function Gallery({ tools, onOpen, onOpenUrl, onImportFile, onNav, onQuit 
     if (input === '2') return onNav('projects');
     if (input === '3') return onNav('profile');
     if (input === '4') return onNav('catalog');
+    if (input === '5') return onNav('system');
     if (input === '/') { setSearching(true); return; }
     if (input === 'u') { setUrlMode(true); setUrlDraft(''); setUrlErr(''); return; }
     if (input === 'i') { setImportMode(true); setImportDraft(''); setImportErr(''); return; }
@@ -133,7 +135,7 @@ export function Gallery({ tools, onOpen, onOpenUrl, onImportFile, onNav, onQuit 
     <Box flexDirection="column" width={cols} height={rows}>
       <Box justifyContent="space-between">
         <Tabs active="tools" />
-        <Box paddingX={1}>
+        {compactHeader ? null : <Box paddingX={1}>
           <Text color={theme.dim}>
             {favOnly ? '★ ' : ''}{filtered.length} tool{filtered.length === 1 ? '' : 's'}
             {moreAbove ? ' ▲' : ''}{moreBelow ? ' ▼' : ''}
@@ -143,8 +145,15 @@ export function Gallery({ tools, onOpen, onOpenUrl, onImportFile, onNav, onQuit 
             {hidden ? `  ·  ${hidden} desktop-only` : ''}
             {isMobile ? '  ·  mobile' : ''}
           </Text>
-        </Box>
+        </Box>}
       </Box>
+
+      {compactHeader ? <Box paddingX={1}><Text color={theme.dim}>
+        {filtered.length} tool{filtered.length === 1 ? '' : 's'}
+        {hidden ? ` · ${hidden} unavailable` : ''}
+        {catFilter ? ` · ${catFilter}` : ''}
+        {` · ${TOOL_SORT_LABEL[sortMode]}`}
+      </Text></Box> : null}
 
       <Box paddingX={1}>
         {urlMode
@@ -202,7 +211,7 @@ export function Gallery({ tools, onOpen, onOpenUrl, onImportFile, onNav, onQuit 
           { key: 'F', label: 'favs' },
           { key: 'u', label: 'url' },
           { key: 'i', label: 'import' },
-          { key: '2/3/4', label: 'proj/prof/cat' },
+          { key: '2/3/4/5', label: 'proj/prof/cat/sys' },
           { key: 'q', label: 'quit' },
         ]}
       />

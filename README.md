@@ -49,7 +49,7 @@ Nothing to build, but note that unlike every other TypeScript project here this 
 ## Surprising things
 
 - **The inline image preview emits no ANSI escapes.** `src/terminal-image.ts` rasterises the tool's SVG with resvg, then returns a grid of half-block cells, each a glyph plus foreground and background hex colours that **Ink** applies through its own `<Text>` props. Injecting raw SGR sequences into a screen Ink owns produces visible garbage. The preview is opt-in, on `p`, because the form matters more.
-- **This shell persists state, unlike the CLI.** `src/store.ts` keeps saved sessions and the profile as plain JSON under `~/.lolly`, overridable with `$LOLLY_TUI_DIR`. No database, no network.
+- **This shell persists state, unlike the CLI.** `src/store.ts` keeps saved sessions as plain JSON in the directory all three local shells share - `$LOLLY_STATE_DIR`, else the desktop app's data directory when the app is installed here, else `~/.lolly` - in the desktop app's own `saved-state/<slot>.json` record, so a project saved in the app is in Projects here. The profile and project folders stay terminal-only files beside them. No database, no network.
 - **It renders raster, PDF and video by driving the built web shell**, exactly as the CLI does, through `@lolly-tools/node-shell/webshell-render`. So those formats need `npm run build:web` to have run, and the Chromium download from `lolly install-browser`.
 - The alternate-screen dance means a crash that escapes the handlers can leave your terminal in the alternate buffer. `reset` fixes it.
 

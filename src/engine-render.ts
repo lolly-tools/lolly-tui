@@ -30,9 +30,18 @@ export type Manifest = Awaited<ReturnType<typeof loadTool>>['manifest'];
  *  not just the input values. */
 export interface MountResult { runtime: Runtime; manifest: Manifest; reserved: UrlState }
 
-/** Mount a tool, optionally seeded from a share link / saved session's URL-state `query`. */
+/**
+ * Mount a tool, optionally seeded from a share link / saved session's URL-state `query`
+ * and from a saved record's `values`.
+ *
+ * `values` is the saved-session data the desktop app and the web shell both write - the
+ * resolved input values plus their `__`-prefixed markers. A session saved in the desktop
+ * app has only that (no URL-state), so it is what reopens it here. Values win over the
+ * query where both name an input: they are the same state one step later, with nothing
+ * dropped by an encoder. This is the web tool view's own rule (views/tool.ts).
+ */
 export async function mountTool(
-  toolId: string, host: HostV1, query = '',
+  toolId: string, host: HostV1, query = '', values?: Record<string, unknown>,
 ): Promise<MountResult> {
   // Expand a packed `z=` share link FIRST (mirrors shells/cli/src/run.ts) - a no-op on a
   // readable or empty query. Without this the TUI silently loads a packed link at defaults.
@@ -50,13 +59,20 @@ export async function mountTool(
   // dims, unit, dpi, c2pa, password, filename) seed the export panel instead of being
   // silently dropped and reset to manifest defaults.
   const reserved = parseUrlState(expanded, tool.manifest);
-  const runtime = await createRuntime(tool, host, reserved.values as Parameters<typeof createRuntime>[2]);
+  const initial = values ? { ...reserved.values, ...values } : reserved.values;
+  const runtime = await createRuntime(tool, host, initial as Parameters<typeof createRuntime>[2]);
   return { runtime, manifest: tool.manifest, reserved };
 }
 
 /** The current state as a URL query - what a saved session stores + reopens from. */
 export function currentQuery(runtime: Runtime): string {
   return serializeUrlState(runtime.getModel());
+}
+
+/** The current input values by id - the other half of what a saved session stores, and
+ *  the half the desktop app and the web shell read. */
+export function modelValues(runtime: Runtime): Record<string, unknown> {
+  return Object.fromEntries((runtime.getModel() as Array<{ id: string; value: unknown }>).map(i => [i.id, i.value]));
 }
 
 export function exportableFormats(manifest: Manifest): string[] {

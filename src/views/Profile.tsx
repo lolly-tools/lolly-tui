@@ -93,6 +93,7 @@ export function Profile({ bridge, onNav, onQuit }: { bridge: TuiBridge; onNav: (
     if (input === '1') return onNav('tools');
     if (input === '2') return onNav('projects');
     if (input === '4') return onNav('catalog');
+    if (input === '5') return onNav('system');
     if (input === 'q') return onQuit();
     if (input === 'b') { renderEverything(); return; }
     if (input === 'v') { setVdraft(''); setStatus(''); setVerifying(true); return; }
